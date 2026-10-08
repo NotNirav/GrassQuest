@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gemma Vision Spike</title>
+<style>
+  :root {
+    --bg: #f4f1e8; --card: #fffdf7; --ink: #1f2a1c; --muted: #6b7565;
+    --accent: #3f7d3a; --accent-ink: #fff; --line: #ddd6c3;
+    --ok: #2f7d32; --bad: #b3261e; --warn: #9a6700;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141a12; --card: #1d251a; --ink: #e8eedf; --muted: #9aa58f;
+      --accent: #7fc46f; --accent-ink: #10180e; --line: #2f3a2a;
+      --ok: #7fc46f; --bad: #ff8a80; --warn: #f0c060;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: .9rem; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px; margin-bottom: 14px; }
+  h2 { font-size: 1rem; margin: 0 0 10px; }
+  button { font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 12px 16px;
+    background: var(--accent); color: var(--accent-ink); width: 100%; cursor: pointer; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  input[type=text] { font: inherit; width: 100%; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink); margin-bottom: 10px; }
+  label.file { display: block; text-align: center; padding: 12px; border: 2px dashed var(--line);
+    border-radius: 10px; cursor: pointer; margin-bottom: 10px; color: var(--muted); }
+  label.file input { display: none; }
+  img#preview { display: none; width: 100%; border-radius: 10px; margin-bottom: 10px; }
+  progress { width: 100%; height: 10px; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: .88rem; }
+  .kv dt { color: var(--muted); } .kv dd { margin: 0; word-break: break-word; }
+  pre { white-space: pre-wrap; word-break: break-word; background: var(--bg); padding: 10px;
+    border-radius: 8px; font-size: .82rem; margin: 10px 0 0; max-height: 260px; overflow: auto; }
+  .verdict { font-size: 1.3rem; font-weight: 700; margin: 4px 0; }
+  .pass { color: var(--ok); } .fail { color: var(--bad); } .warn { color: var(--warn); }
+  #status { font-size: .88rem; color: var(--muted); margin-top: 8px; min-height: 1.3em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🌿 Gemma Vision Spike</h1>
+  <p class="sub">Can Gemma 4 E2B judge a quest photo inside this phone's browser? Everything runs on-device.</p>
+
+  <section>
+    <h2>1 · Device check</h2>
+    <dl class="kv" id="env"></dl>
+  </section>
+
+  <section>
+    <h2>2 · Load model (~3.2 GB first time, cached after)</h2>
+    <button id="loadBtn">Load Gemma 4 E2B</button>
+    <progress id="bar" value="0" max="1" hidden></progress>
+    <div id="status"></div>
+  </section>
+
+  <section>
+    <h2>3 · Quest + photo</h2>
+    <input type="text" id="quest" value="Find a leaf and photograph it">
+    <label class="file">📷 Take or pick a photo
+      <input type="file" id="photo" accept="image/*" capture="environment">
+    </label>
+    <img id="preview" alt="Selected photo">
+    <button id="verifyBtn" disabled>Judge my photo</button>
+  </section>
+
+  <section id="resultBox" hidden>
+    <h2>4 · Verdict</h2>
+    <div class="verdict" id="verdict"></div>
+    <div id="reaction"></div>
+    <dl class="kv" id="timings" style="margin-top:10px"></dl>
+    <pre id="raw"></pre>
+  </section>
+</main>
+
+<script type="module">
+import {
+  AutoProcessor, Gemma4ForConditionalGeneration, RawImage,
+} from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.0/dist/transformers.min.js";
+
+const MODEL_ID = "onnx-community/gemma-4-E2B-it-ONNX";
+const MAX_SIDE = 768; // downscale photos before they hit the vision encoder
+
+const $ = (id) => document.getElementById(id);
+const metrics = {}; // everything worth copying into NOTES.md
+let processor, model, image;
+
+// ---------- 1. device check ----------
+async function envCheck() {
+  const rows = [
+    ["User agent", navigator.userAgent],
+    ["Device RAM (hint)", navigator.deviceMemory ? `${navigator.deviceMemory} GB+` : "unknown"],
+    ["CPU threads", navigator.hardwareConcurrency ?? "unknown"],
+  ];
+  if (!("gpu" in navigator)) {
+    rows.push(["WebGPU", "❌ not available — use Chrome on Android/desktop"]);
+    $("loadBtn").disabled = true;
+  } else {
+    const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) {
+      rows.push(["WebGPU", "❌ no adapter"]);
+      $("loadBtn").disabled = true;
+    } else {
+      const info = adapter.info || {};
+      rows.push(["WebGPU", "✅ available"]);
+      rows.push(["GPU", [info.vendor, info.architecture, info.description].filter(Boolean).join(" · ") || "unknown"]);
+      rows.push(["shader-f16", adapter.features.has("shader-f16") ? "✅" : "❌ (q4f16 may fail)"]);
+      rows.push(["Max buffer", `${Math.round(adapter.limits.maxBufferSize / 2 ** 20)} MB`]);
+    }
+  }
+  if (navigator.storage?.estimate) {
+    const { quota, usage } = await navigator.storage.estimate();
+    const freeGB = (quota - usage) / 2 ** 30;
+    rows.push(["Storage quota", `${(quota / 2 ** 30).toFixed(1)} GB (used ${(usage / 2 ** 30).toFixed(2)} GB)` +
+      (freeGB < 3.5 ? " ⚠️ too small to cache the model — it will re-download every visit" : "")]);
+  }
+  $("env").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+  Object.assign(metrics, Object.fromEntries(rows));
+}
+envCheck();
+
+// ---------- 2. load model ----------
+$("loadBtn").onclick = async () => {
+  $("loadBtn").disabled = true;
+  $("bar").hidden = false;
+  const files = {};
+  const t0 = performance.now();
+  const progress_callback = (p) => {
+    if (p.status === "progress" && p.total) {
+      files[p.file] = { loaded: p.loaded, total: p.total };
+      const loaded = Object.values(files).reduce((s, f) => s + f.loaded, 0);
+      const total = Object.values(files).reduce((s, f) => s + f.total, 0);
+      $("bar").value = loaded / total;
+      $("status").textContent = `Downloading ${(loaded / 2 ** 30).toFixed(2)} / ${(total / 2 ** 30).toFixed(2)} GB · ${p.file}`;
+    } else if (p.status === "ready" || p.status === "done") {
+      $("status").textContent = `Loaded ${p.file ?? ""}`;
+    }
+  };
+  try {
+    processor = await AutoProcessor.from_pretrained(MODEL_ID, { progress_callback });
+    model = await Gemma4ForConditionalGeneration.from_pretrained(MODEL_ID, {
+      dtype: "q4f16", device: "webgpu", progress_callback,
+    });
+    metrics.loadSeconds = ((performance.now() - t0) / 1000).toFixed(1);
+    $("bar").value = 1;
+    $("status").textContent = `✅ Model ready in ${metrics.loadSeconds}s`;
+    $("verifyBtn").disabled = !image;
+  } catch (err) {
+    console.error(err);
+    $("status").innerHTML = `<span class="fail">❌ Load failed: ${err.message}</span>`;
+    $("loadBtn").disabled = false;
+  }
+};
+
+// ---------- 3. photo ----------
+$("photo").onchange = async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  $("preview").src = URL.createObjectURL(file);
+  $("preview").style.display = "block";
+  const raw = await RawImage.fromBlob(file);
+  const scale = Math.min(1, MAX_SIDE / Math.max(raw.width, raw.height));
+  image = scale < 1 ? await raw.resize(Math.round(raw.width * scale), Math.round(raw.height * scale)) : raw;
+  metrics.imageSize = `${raw.width}×${raw.height} → ${image.width}×${image.height}`;
+  $("verifyBtn").disabled = !model;
+};
+
+// ---------- 4. verify ----------
+const buildPrompt = (quest) => `You are the judge in an outdoor quest game called Side Quests.
+Quest: "${quest}"
+Look at the photo. Decide if it plausibly shows the player completed the quest.
+Be fair but not gullible: screenshots, photos of screens, or clearly unrelated images fail.
+Reply with ONLY a JSON object, no markdown:
+{"pass": true or false, "confidence": number 0-1, "seen": "what is in the photo, max 12 words", "reaction": "one fun, encouraging line, max 20 words"}`;
+
+function parseVerdict(text) {
+  const m = text.match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  try { return JSON.parse(m[0]); } catch { return null; }
+}
+
+$("verifyBtn").onclick = async () => {
+  $("verifyBtn").disabled = true;
+  $("verifyBtn").textContent = "Judging…";
+  $("resultBox").hidden = false;
+  $("verdict").textContent = "…"; $("verdict").className = "verdict";
+  $("reaction").textContent = ""; $("raw").textContent = "";
+  try {
+    const t0 = performance.now();
+    const messages = [{ role: "user", content: [
+      { type: "image" }, { type: "text", text: buildPrompt($("quest").value.trim()) },
+    ] }];
+    const prompt = processor.apply_chat_template(messages, { enable_thinking: false, add_generation_prompt: true });
+    const inputs = await processor(prompt, image, null, { add_special_tokens: false });
+    const tPrep = performance.now();
+
+    let firstTokenAt = null;
+    const outputs = await model.generate({
+      ...inputs, max_new_tokens: 120, do_sample: false,
+      streamer: { put() { firstTokenAt ??= performance.now(); }, end() {} },
+    });
+    const tEnd = performance.now();
+
+    const promptLen = inputs.input_ids.dims.at(-1);
+    const newTokens = outputs.dims.at(-1) - promptLen;
+    const text = processor.batch_decode(outputs.slice(null, [promptLen, null]), { skip_special_tokens: true })[0];
+    $("raw").textContent = text;
+
+    const v = parseVerdict(text);
+    if (v) {
+      $("verdict").textContent = v.pass ? `✅ PASS · ${Math.round(v.confidence * 100)}%` : `❌ FAIL · ${Math.round(v.confidence * 100)}%`;
+      $("verdict").className = `verdict ${v.pass ? "pass" : "fail"}`;
+      $("reaction").textContent = `${v.reaction ?? ""}${v.seen ? `  (saw: ${v.seen})` : ""}`;
+    } else {
+      $("verdict").textContent = "⚠️ Couldn't parse JSON";
+      $("verdict").className = "verdict warn";
+    }
+
+    Object.assign(metrics, {
+      promptTokens: promptLen, newTokens,
+      prepMs: Math.round(tPrep - t0),
+      timeToFirstTokenMs: firstTokenAt ? Math.round(firstTokenAt - tPrep) : null,
+      totalMs: Math.round(tEnd - t0),
+      tokensPerSec: firstTokenAt ? (newTokens / ((tEnd - firstTokenAt) / 1000)).toFixed(1) : null,
+      jsonParsed: !!v,
+    });
+    const show = [
+      ["Image", metrics.imageSize], ["Prompt tokens", promptLen], ["New tokens", newTokens],
+      ["Preprocess", `${metrics.prepMs} ms`], ["First token", `${metrics.timeToFirstTokenMs} ms`],
+      ["Total", `${(metrics.totalMs / 1000).toFixed(1)} s`], ["Speed", `${metrics.tokensPerSec} tok/s`],
+    ];
+    $("timings").innerHTML = show.map(([k, val]) => `<dt>${k}</dt><dd>${val}</dd>`).join("");
+    console.log("SPIKE METRICS", JSON.stringify(metrics, null, 2));
+  } catch (err) {
+    console.error(err);
+    $("verdict").textContent = `❌ Error: ${err.message}`;
+    $("verdict").className = "verdict fail";
+  } finally {
+    $("verifyBtn").disabled = false;
+    $("verifyBtn").textContent = "Judge my photo";
+  }
+};
+</script>
+</body>
+</html>

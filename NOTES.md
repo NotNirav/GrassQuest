@@ -22,3 +22,11 @@ Running log of decisions, problems, and fixes. Raw material for the DEV write-up
 ### Open questions
 - Does the Gemma partner prize accept Gemma 4? (Assumed yes — verify on the challenge page.)
 - GitHub remote: TBD (user will provide).
+
+### Spike page built (`spike/index.html`)
+- Single static page, Transformers.js 4.3.0 from jsDelivr, `Gemma4ForConditionalGeneration`, `q4f16`, WebGPU.
+- Photos downscaled to 768px max side before inference.
+- Prompt asks for JSON `{pass, confidence, seen, reaction}`; logs load time, time to first token, tok/s.
+- Desktop check (Claude desktop browser pane, RTX/Ampere): page loads, WebGPU + shader-f16 OK.
+  Storage quota there is only 2.7 GB, under the ~3.2 GB model, so the model can't be cached in that pane.
+- Phone results: TODO (fill in after running on a real 8 GB Android phone).
