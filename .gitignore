@@ -1,0 +1,18 @@
+node_modules/
+dist/
+build/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+# model weights are downloaded at runtime, never committed
+*.onnx
+*.onnx_data
+*.litertlm
+*.task
+__pycache__/
+.venv/
