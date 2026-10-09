@@ -2,9 +2,15 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "spike",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["-y", "serve@14.2.4", "spike", "-l", "5173"],
+      "name": "api",
+      "runtimeExecutable": "server/.venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--app-dir", "server", "--port", "8000", "--reload", "--reload-dir", "server/app"],
+      "port": 8000
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "web", "run", "dev"],
       "port": 5173
     }
   ]

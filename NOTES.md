@@ -30,3 +30,43 @@ Running log of decisions, problems, and fixes. Raw material for the DEV write-up
 - Desktop check (Claude desktop browser pane, RTX/Ampere): page loads, WebGPU + shader-f16 OK.
   Storage quota there is only 2.7 GB, under the ~3.2 GB model, so the model can't be cached in that pane.
 - Phone results: TODO (fill in after running on a real 8 GB Android phone).
+
+## 2026-10-09 — Pivot: local Ollama, website first
+
+### Decision: drop on-phone inference, use local Ollama
+- The phone spike was never run. Asking every player to download ~3 GB into a mobile browser tab felt fragile.
+- New plan: players run **Gemma 4 through Ollama on their own computer**. The website talks to `localhost:11434` directly from the browser,
+  so **photos never leave the player's machine** and our server never sees them; it only gets the verdict JSON.
+- Cost: players must install Ollama and pull a model (`gemma4:e2b`, the lightest Gemma 4 vision tag). Accepted to keep things simple.
+- Gotcha: Ollama returns **403 to requests from unknown websites**. Hosted site needs `OLLAMA_ORIGINS=<site url>` on each player's machine.
+  The setup screen shows the exact command for Windows/macOS/Linux.
+- `spike/` removed (still in git history).
+
+### Stack (chosen)
+- Web: React 19 + Vite 8, plain CSS, desktop-first but works at phone width.
+- API: Python FastAPI (Python because TabPFN, Sentry, Mongo and ElevenLabs all have good Python clients).
+- DB: MongoDB Atlas; falls back to in-memory `mongomock` when `MONGODB_URI` is unset (dev only).
+- Embeddings: `bge-m3` via Ollama, generated once by `scripts/seed.py embed`, stored in `quests_embedded.json` and Atlas.
+
+### Game rules
+- Base XP: common 50 · rare 120 · legendary 300 · boss 500.
+- Multiplier from TabPFN odds p: `0.75 + 1.25 × (1 − p)` (p=1 → 0.75×, p=0 → 2×). Streak bonus +5%/day, max +50%.
+- Level L needs `100 × (L−1)²` XP. 11 level titles, "Couch Potato" → "Legend of the Outside".
+- 12 badges (Early Bird, Night Owl, Botanist, Underdog = finish a quest you had <30% odds on, …).
+- A player gets paid exactly the XP the quest card promised (bug found in testing: the streak ticking up mid-quest changed the payout).
+
+### Vector dedupe
+- Cosine similarities across the 45 quests: median 0.59; true near-dupes ~0.78–0.83
+  (bird-photo ↔ two-birds 0.81, moving-water ↔ waterfall 0.81). Threshold set to **0.78**.
+
+### TabPFN
+- Features: hour, day of week, category, rarity, streak, user attempts, user pass rate (smoothed), quest pass rate (smoothed).
+- Label: pass = 1; fail or skip = 0. Rows that were only shown and never resolved are ignored.
+- Uses `tabpfn-client` (Prior Labs API), so the Render box stays small. Refit at most every 10 min.
+- 300 synthetic rows seeded, labelled `synthetic: true`.
+
+### Test results (real, on this dev machine)
+- `gemma4:12B` vision check on a drawn image: 50 s first call (24 s of that is model load), ~12 tok/s.
+- In the app, `gemma4:12B` **correctly failed a drawn "leaf" for a bark quest** in 10.0 s:
+  "That looks like a digital graphic! Head outside and find a real tree with some texture."
+- Bug found: narrator line from an earlier quest could overwrite the current quest's line (race). Fixed by tracking the current offer id.

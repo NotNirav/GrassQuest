@@ -1,0 +1,6 @@
+[
+  {"id": "boss-five-greens", "title": "Collect 5 different shades of green in one photo", "category": "plants", "rarity": "boss", "proof": "At least five visibly different green natural things (leaves, moss, grass) in one frame."},
+  {"id": "boss-golden-hour", "title": "Be outside for golden hour and catch the light on a tree", "category": "sky", "rarity": "boss", "proof": "Warm, low sunlight hitting a tree or plants."},
+  {"id": "boss-water-walk", "title": "Walk to the nearest natural water and photograph it", "category": "water", "rarity": "boss", "proof": "A lake, river, sea, pond, or stream, photographed outdoors."},
+  {"id": "boss-bird-water", "title": "Find a bird near water and photograph them together", "category": "birds", "rarity": "boss", "proof": "A bird and a body of water (pond, river, lake, fountain, sea) in the same photo."}
+]
