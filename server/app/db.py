@@ -20,6 +20,8 @@ quests = db.quests
 tts_cache = db.tts_cache
 tabpfn_usage = db.tabpfn_usage
 tts_usage = db.tts_usage
+context_cache = db.context_cache
+templates = db.templates
 
 
 def _load(name):
@@ -27,12 +29,13 @@ def _load(name):
 
 
 def ensure_seeded():
-    """Make sure the quest pool exists. Embeddings come from scripts/seed.py."""
-    if quests.count_documents({}) > 0:
+    """Load the v2 quest library if the database doesn't have it yet (build it with scripts/build_quests.py)."""
+    if quests.find_one({"template_id": {"$exists": True}}):
         return
-    embedded = config.DATA_DIR / "quests_embedded.json"
-    pool = _load("quests_embedded.json") if embedded.exists() else _load("quests.json") + _load("boss_quests.json")
-    for q in pool:
-        quests.replace_one({"_id": q["id"]}, {**q, "_id": q["id"]}, upsert=True)
+    quests.delete_many({})
+    for q in _load("quests_v2.json"):
+        quests.replace_one({"_id": q["_id"]}, q, upsert=True)
+    for t in _load("templates_v2.json"):
+        templates.replace_one({"_id": t["_id"]}, t, upsert=True)
     attempts.create_index([("user_id", 1), ("created_at", -1)])
     users.create_index("handle_lower", unique=True)

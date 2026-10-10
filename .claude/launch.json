@@ -4,7 +4,7 @@
     {
       "name": "api",
       "runtimeExecutable": "server/.venv/Scripts/python.exe",
-      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--app-dir", "server", "--port", "8000", "--reload", "--reload-dir", "server/app"],
+      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--app-dir", "server", "--port", "8000"],
       "port": 8000
     },
     {

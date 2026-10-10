@@ -16,8 +16,8 @@ CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 
-# a user needs this many attempts before TabPFN replaces the heuristic
-TABPFN_MIN_USER_ATTEMPTS = int(os.getenv("TABPFN_MIN_USER_ATTEMPTS", "5"))
+# TabPFN learns from everyone's history (incl. "this player has 0 attempts"), so it can score new players too
+TABPFN_MIN_USER_ATTEMPTS = int(os.getenv("TABPFN_MIN_USER_ATTEMPTS", "0"))
 
 # Free-tier guard. Real limits (Oct 2026): 5M tokens/day, 20M/month. Defaults stop at 75%; local .env uses 50%.
 TABPFN_DAILY_CAP = int(os.getenv("TABPFN_DAILY_CAP", "3750000"))
@@ -26,5 +26,5 @@ TABPFN_MAX_CALLS_PER_MINUTE = int(os.getenv("TABPFN_MAX_CALLS_PER_MINUTE", "30")
 TABPFN_MAX_CALLS_PER_USER_DAY = int(os.getenv("TABPFN_MAX_CALLS_PER_USER_DAY", "40"))
 
 # ElevenLabs free tier: 10k credits/month (~0.5 credit/char on flash). Default cap 14k chars ≈ 7k credits (70%).
-ELEVENLABS_MONTHLY_CHAR_CAP = int(os.getenv("ELEVENLABS_MONTHLY_CHAR_CAP", "14000"))
+ELEVENLABS_MONTHLY_CHAR_CAP = int(os.getenv("ELEVENLABS_MONTHLY_CHAR_CAP", "0"))  # 0 = no new runtime lines; only pre-made clips play
 ELEVENLABS_MAX_LINES_PER_USER_DAY = int(os.getenv("ELEVENLABS_MAX_LINES_PER_USER_DAY", "15"))

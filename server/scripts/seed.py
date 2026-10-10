@@ -1,79 +1,50 @@
-"""One-off setup.
+"""SYNTHETIC history so TabPFN has something to learn from on day one. Every row is stored with synthetic=True,
+excluded from leaderboards, and the write-up says so.
 
-  python -m scripts.seed embed       # embed quests with local Ollama bge-m3 -> app/data/quests_embedded.json
-  python -m scripts.seed load        # upsert quests (+ embeddings) into MongoDB and create the Atlas vector index
-  python -m scripts.seed synthetic   # add SYNTHETIC attempt rows (synthetic=True) so TabPFN has something to learn from on day one
-
-Run from the server/ folder.
+  python -m scripts.seed synthetic      (run from server/)
 """
-import json
+import math
 import random
 import sys
-import urllib.request
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
-from app import config, db, difficulty
-
-OLLAMA = "http://localhost:11434"
-EMBED_MODEL = "bge-m3"
+from app import db, difficulty
 
 
-def embed(text: str) -> list[float]:
-    req = urllib.request.Request(f"{OLLAMA}/api/embed", json.dumps({"model": EMBED_MODEL, "input": text}).encode(),
-                                 {"Content-Type": "application/json"})
-    return json.loads(urllib.request.urlopen(req, timeout=120).read())["embeddings"][0]
+def fake_context(rng):
+    hour = rng.randint(5, 22)
+    temp = rng.choice([rng.uniform(8, 18), rng.uniform(18, 30), rng.uniform(30, 40)])
+    precip = rng.choice([0, 0, 0, 0, rng.uniform(0.1, 1), rng.uniform(1, 5)])
+    band = "rain" if precip >= 1 else "drizzle" if precip > 0 else "hot" if temp >= 35 else "clear"
+    return {
+        "weather": {"temp": round(temp), "precip_mm": round(precip, 1), "wind": rng.randint(0, 35), "band": band},
+        "sun": {"local_hour": hour, "local_dow": rng.randint(0, 6), "minutes_to_sunset": (18 - hour) * 60 + rng.randint(-30, 30)},
+    }
 
 
-def cmd_embed():
-    pool = db._load("quests.json") + db._load("boss_quests.json")
-    for q in pool:
-        q["embedding"] = embed(f"{q['title']}. {q['proof']}")
-        print("embedded", q["id"])
-    (config.DATA_DIR / "quests_embedded.json").write_text(json.dumps(pool), encoding="utf-8")
-    print(f"wrote {len(pool)} quests, dim={len(pool[0]['embedding'])}")
-
-
-def cmd_load():
-    pool = db._load("quests_embedded.json")
-    for q in pool:
-        db.quests.replace_one({"_id": q["id"]}, {**q, "_id": q["id"]}, upsert=True)
-    print(f"upserted {len(pool)} quests into {'Atlas' if db.USING_ATLAS else 'in-memory db'}")
-    if db.USING_ATLAS:
-        from pymongo.operations import SearchIndexModel
-
-        existing = [i["name"] for i in db.quests.list_search_indexes()]
-        if "quest_embedding_index" not in existing:
-            db.quests.create_search_index(SearchIndexModel(
-                name="quest_embedding_index", type="vectorSearch",
-                definition={"fields": [{"type": "vector", "path": "embedding", "numDimensions": len(pool[0]["embedding"]),
-                                        "similarity": "cosine"}]},
-            ))
-            print("created vector search index (takes ~1 min to become queryable)")
-
-
-def cmd_synthetic(n: int = 300):
-    """Clearly-labelled fake history. The write-up must say these are synthetic."""
-    random.seed(42)
-    pool = db._load("quests.json") + db._load("boss_quests.json")
+def cmd_synthetic(n: int = 600):
+    rng = random.Random(42)
+    pool = list(db.quests.find({}, {"embedding": 0}))
     rows = []
     for i in range(n):
-        q = random.choice(pool)
-        hour, dow = random.randint(5, 23), random.randint(0, 6)
-        attempts_so_far = random.randint(0, 40)
-        skill = random.uniform(0.3, 0.9)
-        streak = random.randint(0, 10)
-        stats = {"attempts": attempts_so_far, "pass_rate": skill}
-        quest = {**q, "_id": q["id"]}
-        p = difficulty.heuristic(quest, hour, stats)
-        p = min(0.97, p + 0.02 * min(streak, 5) + (0.08 if dow >= 5 else 0))  # weekends + streaks help
-        outcome = "pass" if random.random() < p else random.choice(["fail", "skip"])
-        feats = difficulty.feature_row(quest, hour, dow, streak, stats, 0.5)
+        q = rng.choice(pool)
+        ctx = fake_context(rng)
+        stats = {"attempts": rng.randint(0, 40), "pass_rate": round(rng.uniform(0.3, 0.9), 3)}
+        streak = rng.randint(0, 10)
+        dist = rng.choice([0, 0, rng.randint(100, 600), rng.randint(600, 1500)]) if q["needs"] else 0
+        p = difficulty.heuristic(q, {"weather": ctx["weather"]}, stats, dist)
+        p = min(0.97, p + 0.015 * min(streak, 6) + (0.06 if ctx["sun"]["local_dow"] >= 5 else 0)
+                - (0.1 if ctx["sun"]["local_hour"] >= 21 and q["cat"] not in ("sky", "mindful", "rain") else 0))
+        outcome = "pass" if rng.random() < p else rng.choice(["fail", "skip", "skip"])
+        minutes = difficulty.heuristic_minutes(q, dist) * math.exp(rng.gauss(0, 0.35)) if outcome == "pass" else None
+        feats = difficulty.feature_row(q, ctx, streak, stats, dist)
         rows.append({
-            "_id": f"synthetic-{uuid.uuid4().hex}", "user_id": f"synthetic-user-{i % 12}", "quest_id": q["id"],
-            "category": q["category"], "rarity": q["rarity"], "outcome": outcome, "fails": 0, "p_complete": p,
-            "features": dict(zip(difficulty.FEATURES, feats)), "synthetic": True,
-            "local_date": (date.today() - timedelta(days=random.randint(1, 30))).isoformat(),
+            "_id": f"synthetic-{uuid.uuid4().hex}", "user_id": f"synthetic-user-{i % 20}", "quest_id": q["_id"],
+            "template_id": q["template_id"], "cat": q["cat"], "rarity": q["rarity"], "outcome": outcome, "accepted": True,
+            "fails": 0, "p_complete": p, "features": dict(zip(difficulty.FEATURES, feats)),
+            "duration_min": round(minutes, 1) if minutes else None, "synthetic": True,
+            "local_date": (date.today() - timedelta(days=rng.randint(8, 40))).isoformat(),
             "created_at": datetime.now(timezone.utc) - timedelta(days=30),
         })
     db.attempts.delete_many({"synthetic": True})
@@ -82,4 +53,4 @@ def cmd_synthetic(n: int = 300):
 
 
 if __name__ == "__main__":
-    {"embed": cmd_embed, "load": cmd_load, "synthetic": cmd_synthetic}[sys.argv[1]]()
+    {"synthetic": cmd_synthetic}[sys.argv[1]]()

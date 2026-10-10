@@ -76,8 +76,8 @@ def pause(reason: str, until: datetime):
     log.warning("TabPFN paused until %s: %s", until.isoformat(), reason)
 
 
-def allow(user_id: str) -> tuple[bool, str]:
-    """May we spend one more TabPFN call right now? Returns (ok, reason-if-not)."""
+def allow(user_id: str, calls: int = 1) -> tuple[bool, str]:
+    """May we spend `calls` more TabPFN calls right now? Returns (ok, reason-if-not)."""
     if not config.TABPFN_TOKEN:
         return False, "not configured"
     now = _now()
@@ -89,24 +89,24 @@ def allow(user_id: str) -> tuple[bool, str]:
         window = int(time.time() // 60)
         if _minute["window"] != window:
             _minute.update(window=window, calls=0)
-        if _minute["calls"] >= config.TABPFN_MAX_CALLS_PER_MINUTE:
+        if _minute["calls"] + calls > config.TABPFN_MAX_CALLS_PER_MINUTE:
             return False, "busy: site-wide rate limit"
 
         day, _ = _keys(now)
         user_calls = db.tabpfn_usage.find_one({"_id": f"user:{user_id}:{day}"}) or {}
-        if user_calls.get("calls", 0) >= config.TABPFN_MAX_CALLS_PER_USER_DAY:
+        if user_calls.get("calls", 0) + calls > config.TABPFN_MAX_CALLS_PER_USER_DAY:
             return False, "daily limit for this player"
 
         _refresh_server_usage()
         u = usage()
-        if u["monthly_used"] + COST_PER_CALL > u["monthly_cap"]:
+        if u["monthly_used"] + COST_PER_CALL * calls > u["monthly_cap"]:
             pause("monthly free-tier budget reached", _next_month(now))
             return False, _pause["reason"]
-        if u["daily_used"] + COST_PER_CALL > u["daily_cap"]:
+        if u["daily_used"] + COST_PER_CALL * calls > u["daily_cap"]:
             pause("daily free-tier budget reached", _next_day(now))
             return False, _pause["reason"]
 
-        _minute["calls"] += 1
+        _minute["calls"] += calls
         return True, ""
 
 
