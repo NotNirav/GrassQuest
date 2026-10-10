@@ -170,3 +170,7 @@ T += [
     dict(id="dog-walk-along", t="Offer to walk a friend's or neighbour's dog", cat="social", needs=[], effort=3, min=30, time="day", kind="animal", proof="The dog on the walk"),
     dict(id="photo-walk", t="Take {n} photos of things you've never noticed on your street", cat="photo", needs=[], effort=2, min=20, time="day", proof="Your favourite of them", params={"n": [3, 5]}),
 ]
+
+from scripts.quest_templates_more import templates as _more  # noqa: E402
+
+T += _more()

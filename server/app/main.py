@@ -101,10 +101,14 @@ def world(body: Where):
 
 
 @app.get("/api/geocode")
-def geocode(q: str):
+def geocode(q: str, lat: float | None = None, lon: float | None = None):
     if len(q.strip()) < 2:
         return []
-    return context.search_city(q.strip())
+    try:
+        return context.search_place(q.strip(), (lat, lon) if lat is not None and lon is not None else None)
+    except Exception:
+        log.exception("place search failed")
+        raise HTTPException(502, "Place search is busy. Try again in a moment.")
 
 
 # ---------- quests ----------

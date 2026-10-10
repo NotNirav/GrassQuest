@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Check, Cpu, MapPin, RefreshCw, User, X } from "lucide-react";
 import { api } from "../lib/api.js";
-import { currentPlace, round } from "../lib/location.js";
+import { currentPlace, locationPermission, round } from "../lib/location.js";
 import MapView from "../components/MapView.jsx";
 import { detectGemma, MIN_MODEL } from "../lib/gemma.js";
 
@@ -16,6 +16,24 @@ export default function Setup({ settings, existing = false, onDone }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // Ask for the browser's location as soon as setup opens (this is what shows the permission popup)
+  useEffect(() => {
+    if (place) return;
+    locationPermission().then((state) => {
+      if (state === "denied") setPlaceErr("denied");
+      else locate();
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Suggestions while typing: localities, streets, buildings, landmarks near you
+  useEffect(() => {
+    if (query.trim().length < 3) { setResults([]); return; }
+    const id = setTimeout(() => {
+      api.geocode(query.trim(), place || settings.place).then(setResults).catch(() => {});
+    }, 300);
+    return () => clearTimeout(id);
+  }, [query]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const checkAi = useCallback(async () => {
     setAi({ status: "checking" });
     setAi(await detectGemma(settings.ollamaUrl));
@@ -29,7 +47,7 @@ export default function Setup({ settings, existing = false, onDone }) {
       const p = await currentPlace();
       await choose(p);
     } catch (e) {
-      setPlaceErr(e.message);
+      setPlaceErr(e.message === "denied" || e.message === "timeout" || e.message === "unavailable" ? e.message : e.message);
     } finally {
       setLocating(false);
     }
@@ -45,13 +63,19 @@ export default function Setup({ settings, existing = false, onDone }) {
     e.preventDefault();
     setPlaceErr("");
     try {
-      const r = await api.geocode(query);
+      const r = await api.geocode(query, place || settings.place);
       setResults(r);
-      if (!r.length) setPlaceErr("No places found. Try a city name.");
+      if (!r.length) setPlaceErr("Nothing found. Try your locality, a road, or a landmark near you.");
     } catch (e2) {
       setPlaceErr(e2.message);
     }
   }
+
+  const LOCATION_HELP = {
+    denied: <>Location is blocked for this site. Click the <b>lock / tune icon</b> left of the address bar → <b>Location → Allow</b>, then reload. On Windows also check <b>Settings → Privacy &amp; security → Location</b> is on and your browser is allowed.</>,
+    timeout: "Your computer took too long to find its location. Try again, or search below.",
+    unavailable: "Your computer couldn't work out where it is. Make sure Windows location is on, or search below.",
+  };
 
   async function start(e) {
     e.preventDefault();
@@ -93,22 +117,24 @@ export default function Setup({ settings, existing = false, onDone }) {
           ) : (
             <>
               <p className="muted" style={{ margin: "0 0 10px" }}>Used for live weather and the real places near you. Your exact spot is only used to measure distances and is never stored.</p>
-              <button className="btn dark" onClick={locate} disabled={locating}>{locating ? "Finding you…" : "Use my location"}</button>
+              <button className="btn dark" onClick={locate} disabled={locating}>{locating ? "Asking your browser…" : "Use my exact location"}</button>
+              {placeErr && <div className="error">{LOCATION_HELP[placeErr] ?? placeErr}</div>}
               <form onSubmit={search} className="field" style={{ marginTop: 14 }}>
-                <label className="small muted" htmlFor="city">Or search for your town</label>
+                <label className="small muted" htmlFor="city">Or search your locality, road, building or a landmark</label>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <input id="city" className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="e.g. Pune" />
+                  <input id="city" className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="e.g. Pimple Saudagar, Spine Road, Phoenix Mall" autoComplete="off" />
                   <button className="btn quiet">Search</button>
                 </div>
               </form>
               {results.length > 0 && (
                 <div className="results">
                   {results.map((r) => (
-                    <button key={r.label} onClick={() => { setResults([]); choose({ lat: r.lat, lon: r.lon }).catch((e2) => setPlaceErr(e2.message)); }}>{r.label}</button>
+                    <button key={`${r.lat},${r.lon}`} onClick={() => { setResults([]); setQuery(""); choose({ lat: r.lat, lon: r.lon }).catch((e2) => setPlaceErr(e2.message)); }}>
+                      <b>{r.title}</b>{r.detail && <span className="muted"> · {r.detail}</span>}
+                    </button>
                   ))}
                 </div>
               )}
-              {placeErr && <div className="error">{placeErr}</div>}
             </>
           )}
         </div>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { BookOpen, Coins, Flame, Map, Tent, Trophy, User } from "lucide-react";
+import { BookOpen, Coins, Flame, Map, Tent, Trophy, User, Volume2, VolumeX } from "lucide-react";
+import { ranger, setVoice, voiceOn } from "./lib/ranger.js";
 import Logo from "./components/Logo.jsx";
 import { api } from "./lib/api.js";
 import { detectGemma, warmUp } from "./lib/gemma.js";
@@ -27,6 +28,7 @@ export default function App() {
   const [tab, setTab] = useState("today");
   const [focus, setFocus] = useState(false);
   const [started, setStarted] = useState(false);
+  const [voice, setVoiceState] = useState(voiceOn);
 
   const update = useCallback((patch) => {
     setSettings((s) => {
@@ -56,7 +58,7 @@ export default function App() {
       <>
         <Nav />
         <Setup settings={settings} existing={!!settings.userId}
-          onDone={(user, patch) => { update({ ...patch, ...(user ? { userId: user.id } : {}) }); if (user) setPlayer(user); }} />
+          onDone={(user, patch) => { update({ ...patch, ...(user ? { userId: user.id } : {}) }); if (user) { setPlayer(user); ranger("welcome"); } }} />
       </>
     );
   }
@@ -78,13 +80,15 @@ export default function App() {
               <span title="Streak"><Flame size={17} color="var(--signal)" />{player.streak}</span>
               <span title="Seeds"><Coins size={17} />{player.seeds}</span>
               <span className="lvl-label" title="Level">Lv {player.level}</span>
+              <button className="btn link" style={{ padding: 0 }} title={voice ? "Mute the Ranger" : "Unmute the Ranger"} aria-label={voice ? "Mute the Ranger" : "Unmute the Ranger"}
+                onClick={() => { setVoice(!voice); setVoiceState(!voice); }}>{voice ? <Volume2 size={18} /> : <VolumeX size={18} />}</button>
             </div>
           )}
         </Nav>
       )}
       <main>
         <div hidden={tab !== "today"}>
-          <Today settings={settings} model={model} player={player} onPlayer={setPlayer} onFocus={setFocus} />
+          <Today settings={settings} model={model} player={player} onPlayer={setPlayer} onFocus={setFocus} onPlace={(place) => update({ place })} />
         </div>
         {tab === "camp" && player && <Basecamp player={player} phase={phase} onPlayer={setPlayer} />}
         {tab === "guide" && player && <FieldGuide player={player} />}

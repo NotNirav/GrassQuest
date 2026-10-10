@@ -325,10 +325,23 @@ def area(lat: float, lon: float) -> dict:
     return data
 
 
-def search_city(q: str) -> list[dict]:
-    r = httpx.get("https://nominatim.openstreetmap.org/search", params={"format": "jsonv2", "q": q, "limit": 5},
-                  headers=UA, timeout=15)
-    return [{"label": x["display_name"], "lat": round(float(x["lat"]), 2), "lon": round(float(x["lon"]), 2)} for x in r.json()]
+def search_place(q: str, near: tuple[float, float] | None = None) -> list[dict]:
+    """Localities, streets, buildings and landmarks (Photon, komoot's free OSM search), biased towards the player."""
+    params = {"q": q, "limit": 7}
+    if near:
+        params.update(lat=near[0], lon=near[1])
+    r = httpx.get("https://photon.komoot.io/api/", params=params, headers=UA, timeout=10)
+    out = []
+    for f in r.json().get("features", []):
+        p = f["properties"]
+        lon, lat = f["geometry"]["coordinates"]
+        title = p.get("name") or " ".join(filter(None, [p.get("housenumber"), p.get("street")])) or p.get("city")
+        detail = ", ".join(dict.fromkeys(filter(None, [p.get("street") if p.get("name") else None, p.get("district") or p.get("locality"),
+                                                       p.get("city"), p.get("state")])))
+        if title:
+            out.append({"title": title, "detail": detail, "label": f"{title}, {detail}" if detail else title,
+                        "lat": round(lat, 5), "lon": round(lon, 5)})
+    return out
 
 
 def build(lat: float, lon: float) -> dict:

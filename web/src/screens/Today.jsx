@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowUp, Camera, Clock, CloudRain, Coins, Footprints, MapPin, RefreshCw, Sparkles, Sunset, Thermometer, Trophy, Wind } from "lucide-react";
+import { ArrowLeft, ArrowUp, Camera, Clock, CloudRain, Coins, Crosshair, Footprints, MapPin, RefreshCw, Sparkles, Sunset, Thermometer, Trophy, Wind } from "lucide-react";
 import { api } from "../lib/api.js";
 import { fileToBase64, judge, personalize } from "../lib/gemma.js";
-import { bearingArrow, formatDistance } from "../lib/location.js";
+import { departureLine, ranger, stopRanger } from "../lib/ranger.js";
+import { bearingArrow, currentPlace, formatDistance } from "../lib/location.js";
 import { CATEGORY_PHOTO, photo } from "../lib/photos.js";
 import MapView from "../components/MapView.jsx";
 import FieldCard from "../components/FieldCard.jsx";
@@ -15,7 +16,7 @@ const RARITY_COLOR = { common: "var(--common)", rare: "var(--rare)", legendary: 
 const loadActive = () => { try { return JSON.parse(localStorage.getItem(ACTIVE_KEY) || "null"); } catch { return null; } };
 const saveActive = (a) => { try { a ? localStorage.setItem(ACTIVE_KEY, JSON.stringify(a)) : localStorage.removeItem(ACTIVE_KEY); } catch { /* ignore */ } };
 
-export default function Today({ settings, model, player, onPlayer, onFocus }) {
+export default function Today({ settings, model, player, onPlayer, onFocus, onPlace }) {
   const [data, setData] = useState(null); // { context, choices, rain_check }
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -23,6 +24,20 @@ export default function Today({ settings, model, player, onPlayer, onFocus }) {
   const [brief, setBrief] = useState(null);
   const [active, setActive] = useState(loadActive); // { choice, brief, ctx, startedAt, stage }
   const [result, setResult] = useState(null);
+  const [locMsg, setLocMsg] = useState("");
+
+  async function relocate() {
+    setLocMsg("Asking your browser for your exact location…");
+    try {
+      const p = await currentPlace();
+      onPlace({ ...p, label: settings.place?.label });
+      setLocMsg(`Updated · accurate to about ${p.accuracy} m`);
+    } catch (e) {
+      setLocMsg(e.message === "denied"
+        ? "Location is blocked. Click the icon left of the address bar → Location → Allow, then try again."
+        : "Couldn't get your location right now. You can also set it in Profile → change.");
+    }
+  }
   const briefs = useRef({}); // offer_id -> Promise<briefing>, so each one is written once
   const shown = useRef([]); // templates already offered this session, so rerolls bring genuinely new quests
 
@@ -42,6 +57,7 @@ export default function Today({ settings, model, player, onPlayer, onFocus }) {
     try {
       const d = await api.today(settings.userId, settings.place, exclude);
       setData(d);
+      if (d.rain_check && !exclude.length) ranger("rain-check");
       onPlayer(d.player);
     } catch (e) {
       setError(e.message);
@@ -50,7 +66,7 @@ export default function Today({ settings, model, player, onPlayer, onFocus }) {
     }
   }, [settings.userId, settings.place, onPlayer]);
 
-  useEffect(() => { if (!active) load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!active) load(); }, [settings.place?.lat, settings.place?.lon]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // First visit to an area: nearby places are still being fetched, so refresh once they're likely ready
   useEffect(() => {
@@ -78,6 +94,7 @@ export default function Today({ settings, model, player, onPlayer, onFocus }) {
   function update(a) { setActive(a); saveActive(a); }
 
   async function go() {
+    ranger(departureLine(data.context), selected.slot === "stretch" ? "stretch" : null);
     await api.accept(selected.offer_id).catch(() => {});
     update({ choice: selected, brief: brief ?? { title: selected.quest.title, briefing: "", tip: selected.quest.proof }, ctx: data.context, startedAt: Date.now(), stage: "out" });
   }
@@ -98,7 +115,12 @@ export default function Today({ settings, model, player, onPlayer, onFocus }) {
     return (
       <Proof active={active} model={model} settings={settings}
         onBackOut={() => update({ ...active, stage: "out" })}
-        onResult={(r) => { if (r.player) onPlayer(r.player); setResult({ ...r, quest: active.brief.title || active.choice.quest.title }); }} />
+        onResult={(r) => {
+          if (r.player) onPlayer(r.player);
+          stopRanger();
+          ranger(r.verdict, r.new_card ? "new-card" : null, r.level_up ? "level-up" : null, r.verdict !== "no" && r.player?.streak > 1 ? "streak" : null);
+          setResult({ ...r, quest: active.brief.title || active.choice.quest.title });
+        }} />
     );
   }
 
@@ -111,7 +133,11 @@ export default function Today({ settings, model, player, onPlayer, onFocus }) {
           <div className="kicker">{ctx ? [ctx.area.name, ctx.area.city].filter(Boolean).join(" · ") : "Today"}</div>
           <h1>Today's quests</h1>
         </div>
-        {ctx && <Conditions ctx={ctx} />}
+        <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
+          {ctx && <Conditions ctx={ctx} />}
+          <button className="btn link small" onClick={relocate}><Crosshair size={14} /> Update my location</button>
+          {locMsg && <span className="small muted">{locMsg}</span>}
+        </div>
       </div>
 
       {data?.rain_check && (

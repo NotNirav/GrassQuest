@@ -1,10 +1,19 @@
 // Browser location. The exact point stays in this browser and is sent only to measure distances; the server never stores it.
+/** "granted" | "prompt" | "denied" | "unknown" — lets us explain a block instead of failing silently. */
+export async function locationPermission() {
+  try {
+    return (await navigator.permissions.query({ name: "geolocation" })).state;
+  } catch {
+    return "unknown";
+  }
+}
+
 export function currentPlace() {
   return new Promise((resolve, reject) => {
     if (!("geolocation" in navigator)) return reject(new Error("This browser can't share location. Search for your city instead."));
     navigator.geolocation.getCurrentPosition(
       (pos) => resolve({ lat: round(pos.coords.latitude), lon: round(pos.coords.longitude), accuracy: Math.round(pos.coords.accuracy), label: null }),
-      (err) => reject(new Error(err.code === 1 ? "Location permission was denied. Search for your city instead." : "Couldn't get your location. Search for your city instead.")),
+      (err) => reject(Object.assign(new Error(err.code === 1 ? "denied" : err.code === 3 ? "timeout" : "unavailable"), { code: err.code })),
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 60 * 1000 },
     );
   });

@@ -148,3 +148,21 @@ generic green look. Rebuilt from PLAN.md.
 - Test helpers on NotNirav (marked demo): +600 Seeds, 6 demo Field Guide cards. Remove before submission.
 - New logo: a map pin with three grass blades inside, on signal orange; also the favicon.
 - Build script reuses old template embeddings (a full rebuild stalled when Ollama kept swapping Gemma and bge-m3).
+
+## 2026-10-11 — Ranger voice, real location prompt, address search, 1,324 quests, demo data
+
+- **ElevenLabs:** 16 Ranger lines generated once (1,034 characters, free tier: 64 -> ~1.1k of 10k credits), saved as static
+  mp3s in web/public/voice. They play at real moments: welcome, departure (picked from live weather/time: rain, heat, night,
+  golden hour, morning…), pass/close/no, new Field Guide card, level up, streak, rain check, stretch quest. Mute toggle in nav.
+  Zero ElevenLabs calls during play. `scripts/make_voice.py` skips existing files, so re-runs never spend credits.
+- **Location prompt:** Nirav's browser never showed a permission popup. He had used city search, and afterwards a saved place
+  meant setup never re-ran. Now setup asks for location on open (detecting "blocked" via the Permissions API, with
+  how-to-unblock help), and Today has an "Update my location" button that asks on the spot.
+- **Search:** Nominatim city search replaced by Photon (komoot, free, no key): localities, roads, buildings, landmarks,
+  type-ahead, biased to the player's area. ~0.7 s per query.
+- **Quests:** no clean openly licensed "outdoor quests" dataset exists, and copying other sites' lists would be a copyright
+  problem, so wrote 126 more original templates for more situations (gentle/doorstep, neighbourhood, campus/office break,
+  family, pets, kindness, citizen science, monsoon, winter, heat, art, night). 248 templates -> 1,324 quests.
+  With no mapped parks nearby: ~135-140 templates possible in daytime, 49 at night.
+- **Demo data:** `python -m scripts.demo add NotNirav` / `remove`. 1,500 Seeds, 8 demo cards, 6 demo explorers with this
+  week's completions. All tagged demo=True. **Run `remove` before submitting.**
