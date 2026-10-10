@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
@@ -209,7 +210,9 @@ class Speak(BaseModel):
 def speak(body: Speak):
     try:
         audio = tts.speak(body.text, body.user_id)
-    except Exception:
+    except Exception as e:
+        detail = getattr(getattr(e, "response", None), "text", "")[:300]
+        logging.getLogger(__name__).warning("ElevenLabs failed, browser voice will be used: %s %s", e, detail)
         audio = None
     if not audio:
         return Response(status_code=204)  # client falls back to the browser's own voice
