@@ -1,7 +1,5 @@
-import { DEFAULT_OLLAMA, RECOMMENDED_MODEL } from "./gemma.js";
-
-const KEY = "sidequests.settings";
-const DEFAULTS = { userId: null, ollamaUrl: DEFAULT_OLLAMA, model: RECOMMENDED_MODEL, voice: true };
+const KEY = "grassquest.settings";
+const DEFAULTS = { userId: null, ollamaUrl: "http://localhost:11434", place: null };
 
 export function loadSettings() {
   try {

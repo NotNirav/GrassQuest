@@ -1,15 +1,9 @@
-import { loadSettings } from "./settings.js";
-
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-export function clock() {
+export function localDate() {
   const d = new Date();
   const pad = (n) => String(n).padStart(2, "0");
-  return {
-    today: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
-    hour: d.getHours(),
-    dow: (d.getDay() + 6) % 7, // Monday = 0
-  };
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 async function call(path, { method = "GET", body } = {}) {
@@ -31,23 +25,19 @@ async function call(path, { method = "GET", body } = {}) {
   return res.json();
 }
 
+const post = (path, body) => call(path, { method: "POST", body });
+
 export const api = {
-  createUser: (handle) => call("/api/users", { method: "POST", body: { handle } }),
-  user: (id) => call(`/api/users/${id}?today=${clock().today}`),
-  nextQuest: (userId, { exclude = [], boss = false } = {}) =>
-    call("/api/quests/next", { method: "POST", body: { user_id: userId, exclude, boss, ...clock() } }),
-  verdict: (offerId, v) => call(`/api/offers/${offerId}/verdict`, { method: "POST", body: { ...v, ...clock() } }),
-  giveUp: (offerId) => call(`/api/offers/${offerId}/giveup`, { method: "POST" }),
-  leaderboard: (scope) => call(`/api/leaderboard?scope=${scope}&today=${clock().today}`),
+  createUser: (handle) => post("/api/users", { handle }),
+  user: (id) => call(`/api/users/${id}?today=${localDate()}`),
+  context: (lat, lon) => post("/api/context", { lat, lon }),
+  geocode: (q) => call(`/api/geocode?q=${encodeURIComponent(q)}`),
+  today: (userId, place, exclude = []) => post("/api/quests/today", { user_id: userId, lat: place.lat, lon: place.lon, exclude }),
+  accept: (offerId) => post(`/api/offers/${offerId}/accept`, {}),
+  verdict: (offerId, v) => post(`/api/offers/${offerId}/verdict`, v),
+  giveUp: (offerId) => post(`/api/offers/${offerId}/giveup`, {}),
+  buyCamp: (userId, slot) => post("/api/camp/buy", { user_id: userId, slot, today: localDate() }),
+  buyFreeze: (userId) => post("/api/freeze/buy", { user_id: userId, today: localDate() }),
+  leaderboard: (scope, area) => call(`/api/leaderboard?scope=${scope}&today=${localDate()}${area ? `&area=${encodeURIComponent(area)}` : ""}`),
   badges: () => call("/api/badges"),
-  health: () => call("/api/health"),
-  async tts(text) {
-    const res = await fetch(`${API}/api/tts`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, user_id: loadSettings().userId }),
-    }).catch(() => null);
-    if (!res || res.status !== 200) return null;
-    return URL.createObjectURL(await res.blob());
-  },
 };

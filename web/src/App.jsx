@@ -1,23 +1,31 @@
 import { useCallback, useEffect, useState } from "react";
+import { BookOpen, Coins, Compass, Flame, Map, Tent, Trophy, User } from "lucide-react";
 import { api } from "./lib/api.js";
+import { detectGemma, warmUp } from "./lib/gemma.js";
 import { loadSettings, saveSettings } from "./lib/settings.js";
+import Landing from "./screens/Landing.jsx";
 import Setup from "./screens/Setup.jsx";
-import QuestFlow from "./screens/QuestFlow.jsx";
+import Today from "./screens/Today.jsx";
+import Basecamp from "./screens/Basecamp.jsx";
+import FieldGuide from "./screens/FieldGuide.jsx";
 import Leaderboard from "./screens/Leaderboard.jsx";
 import Profile from "./screens/Profile.jsx";
-import PlayerBar from "./components/PlayerBar.jsx";
 
 const TABS = [
-  ["quest", "Quest"],
-  ["board", "Leaderboard"],
-  ["me", "Profile"],
+  ["today", "Today", Map],
+  ["camp", "Basecamp", Tent],
+  ["guide", "Field Guide", BookOpen],
+  ["board", "Leaderboard", Trophy],
+  ["me", "Profile", User],
 ];
 
 export default function App() {
   const [settings, setSettings] = useState(loadSettings);
   const [player, setPlayer] = useState(null);
-  const [tab, setTab] = useState("quest");
-  const [focus, setFocus] = useState(false); // hides chrome while the player is outside
+  const [model, setModel] = useState(null);
+  const [tab, setTab] = useState("today");
+  const [focus, setFocus] = useState(false);
+  const [started, setStarted] = useState(false);
 
   const update = useCallback((patch) => {
     setSettings((s) => {
@@ -27,48 +35,76 @@ export default function App() {
     });
   }, []);
 
-  const refreshPlayer = useCallback(async () => {
+  useEffect(() => {
     if (!settings.userId) return;
-    try {
-      setPlayer(await api.user(settings.userId));
-    } catch (e) {
-      if (e.status === 404) update({ userId: null }); // server was reset: start over
-    }
+    api.user(settings.userId).then(setPlayer).catch((e) => e.status === 404 && update({ userId: null }));
   }, [settings.userId, update]);
 
   useEffect(() => {
-    refreshPlayer();
-  }, [refreshPlayer]);
+    detectGemma(settings.ollamaUrl).then((r) => {
+      setModel(r.status === "ok" ? r.model : null);
+      if (r.status === "ok") warmUp(settings.ollamaUrl, r.model);
+    });
+  }, [settings.ollamaUrl]);
 
-  if (!settings.userId) {
+  useEffect(() => { window.scrollTo(0, 0); }, [tab]);
+
+  if (!settings.userId || !settings.place) {
+    if (!settings.userId && !started) return <Landing onStart={() => setStarted(true)} />;
     return (
-      <div className="shell">
-        <Setup settings={settings} onDone={(user, patch) => { update({ ...patch, userId: user.id }); setPlayer(user); }} />
-      </div>
+      <>
+        <Nav />
+        <Setup settings={settings} existing={!!settings.userId}
+          onDone={(user, patch) => { update({ ...patch, ...(user ? { userId: user.id } : {}) }); if (user) setPlayer(user); }} />
+      </>
     );
   }
 
+  const hour = new Date().getHours();
+  const phase = hour < 6 || hour >= 19 ? "night" : hour < 9 ? "morning" : hour >= 17 ? "golden" : "day";
+
   return (
-    <div className="shell">
+    <>
       {!focus && (
-        <header className="topbar">
-          <div className="brand"><span className="brand-mark">🌿</span>GrassQuest</div>
-          <nav className="nav" aria-label="Main">
-            {TABS.map(([key, label]) => (
-              <button key={key} aria-current={tab === key ? "page" : undefined} onClick={() => setTab(key)}>{label}</button>
+        <Nav>
+          <nav className="tabs" aria-label="Main">
+            {TABS.map(([key, label, Icon]) => (
+              <button key={key} aria-current={tab === key ? "page" : undefined} onClick={() => setTab(key)}><Icon size={17} />{label}</button>
             ))}
           </nav>
-        </header>
+          {player && (
+            <div className="wallet">
+              <span title="Streak"><Flame size={17} color="var(--signal)" />{player.streak}</span>
+              <span title="Seeds"><Coins size={17} />{player.seeds}</span>
+              <span className="lvl-label" title="Level">Lv {player.level}</span>
+            </div>
+          )}
+        </Nav>
       )}
-      {!focus && player && <PlayerBar player={player} />}
-      {/* stays mounted so switching tabs doesn't throw away the current quest */}
-      <div hidden={tab !== "quest"}>
-        <QuestFlow settings={settings} player={player} onPlayer={setPlayer} onFocus={setFocus} />
+      <main>
+        <div hidden={tab !== "today"}>
+          <Today settings={settings} model={model} player={player} onPlayer={setPlayer} onFocus={setFocus} />
+        </div>
+        {tab === "camp" && player && <Basecamp player={player} phase={phase} onPlayer={setPlayer} />}
+        {tab === "guide" && player && <FieldGuide player={player} />}
+        {tab === "board" && <Leaderboard player={player} />}
+        {tab === "me" && player && (
+          <Profile player={player} model={model} settings={settings}
+            onChangePlace={() => update({ place: null })}
+            onLogout={() => { update({ userId: null, place: null }); setPlayer(null); setStarted(false); }} />
+        )}
+      </main>
+    </>
+  );
+}
+
+function Nav({ children }) {
+  return (
+    <header className="nav">
+      <div className="wrap nav-in">
+        <span className="logo"><span className="logo-mark"><Compass size={18} /></span>GrassQuest</span>
+        {children}
       </div>
-      {tab === "board" && <Leaderboard me={settings.userId} />}
-      {tab === "me" && player && (
-        <Profile player={player} settings={settings} onSettings={update} onLogout={() => { update({ userId: null }); setPlayer(null); }} />
-      )}
-    </div>
+    </header>
   );
 }

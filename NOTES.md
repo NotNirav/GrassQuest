@@ -86,3 +86,34 @@ Running log of decisions, problems, and fixes. Raw material for the DEV write-up
 - **First real TabPFN call:** 11.5 s (fit + predict), cached repeat 0.02 s. 10k tokens used.
 - **ElevenLabs:** free plan does include API access (Developers → API Keys). Guard: ~7k of 10k credits hosted, ~5k locally,
   15 new lines per player per day, cache hits free, only known players can request audio.
+
+## 2026-10-10 (night) — v2: world-aware quests + full redesign
+
+User feedback on v1 was blunt and fair: location/weather-blind quests, hollow economy, token ElevenLabs use, invisible TabPFN,
+generic green look. Rebuilt from PLAN.md.
+
+### Backend (checkpoint 1)
+- `context.py`: Open-Meteo (weather, sunset, rain in next 3 h) + Overpass (parks, water, trees, trails, viewpoints, benches,
+  cafés within 1.5 km) + Nominatim (area name). Coordinates rounded to 0.01° (~1 km); cached in Mongo (weather 20 min, places 7 days).
+  Test cell in central Bengaluru found Cubbon Park Nature Trail, Lotus Pond, Raj Bhavan Gardens etc. 5.6 s cold, 0.03 s cached.
+- Quest library: 92 hand-written templates -> 613 quests (params + twists like "with a friend", "a route you've never used").
+  Tagged with needs / effort / minutes / time of day / wet-ok / rain-check. Template embeddings (bge-m3) in Atlas for dedupe.
+- Eligibility is code, not AI: places present, weather band, daylight, rain coming. Severe weather -> rain-check quests + free freeze.
+- TabPFN: classifier scores every eligible quest; we offer easy (highest odds) / sweet spot (~65%) / stretch. Regressor predicts minutes.
+  New features: temp, rain, wind, minutes to sunset, distance, effort. 600 synthetic rows (labelled). Fit warmed in background.
+- Bug: TabPFN cache missed every time because the key included a random candidate list (60k tokens for 3 loads). Fixed: score all
+  eligible quests once per player/cell/hour/weather -> 3 loads = 20k tokens, repeat loads 2.3 s.
+- Bug: uvicorn --reload silently kept serving old code after an edit. Turned reload off.
+- Economy: Seeds (streak multiplies them), Basecamp (6 slots × 3 tiers), streak freezes, Field Guide cards from Gemma IDs, 14 badges.
+
+### Frontend (checkpoint 2)
+- New identity: trail map / outdoor magazine. Paper, ink, signal orange, procedural topographic lines, Archivo condensed + Instrument Sans.
+- Real Unsplash photography (hotlinked, free licence). MapLibre v5 + OpenFreeMap tiles (v6 had a worker bug under Vite).
+- Screens: landing (+FAQ), 3-check setup (location, local Gemma auto-detected, name), Today (conditions, 3 choices, map, briefing),
+  screen-off Expedition, proof, reward reveal, Basecamp (SVG camp that changes per tier and time of day), Field Guide, leaderboard, profile.
+- Gemma jobs: personal briefing (real place names, direction, weather), lenient 3-way judge (pass / close / no), species ID.
+- Real test runs on `gemma4:12B`: briefing 5 s (prefetched) / 16 s; judging 16–20 s.
+  First prompt was too lenient (bird photo for a puddle quest = "close") and mislabelled a bird as "tree". Fixed by defining "close"
+  as "right idea but incomplete" and making Gemma name the thing before classifying it. Re-test: puddle -> "no", bird -> pass,
+  "Eurasian Blue Tit", kind bird.
+- ElevenLabs runtime generation disabled (cap 0) until the pre-made Ranger lines are approved.

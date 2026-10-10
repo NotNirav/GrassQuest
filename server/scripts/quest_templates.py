@@ -80,7 +80,7 @@ T = [
     dict(id="old-door", t="Find the oldest-looking door in your area", cat="explore", needs=[], effort=2, min=20, time="day", proof="The weathered door"),
     dict(id="street-art", t="Find a piece of street art or a mural", cat="explore", needs=[], effort=3, min=25, time="day", proof="The art"),
     dict(id="color-walk", t="Find {n} {color} things on one street", cat="explore", needs=[], effort=2, min=15, time="day", proof="Any of them", params={"n": [3, 5], "color": COLORS}),
-    dict(id="bench-sit", t="Find a bench at {place} and sit on it for 5 minutes", cat="explore", needs=["bench"], effort=1, min=10, time="any", proof="The view from the bench"),
+    dict(id="bench-sit", t="Sit on a bench outside for 5 minutes and just watch", cat="explore", needs=["bench"], effort=1, min=10, time="any", proof="The view from the bench"),
     dict(id="playground", t="Visit {place}. Swinging is allowed.", cat="explore", needs=["playground"], effort=2, min=20, time="day", proof="The playground"),
     dict(id="hidden-path", t="Find a shortcut or path you've never taken", cat="explore", needs=[], effort=2, min=20, time="day", proof="The path"),
     dict(id="number-hunt", t="Find the number {num} somewhere outside", cat="explore", needs=[], effort=2, min=15, time="day", proof="The number in the wild", params={"num": [7, 13, 21, 42, 99]}),
