@@ -5,7 +5,7 @@ import Faq from "../components/Faq.jsx";
 
 export default function Landing({ onStart }) {
   return (
-    <>
+    <div className="landing">
       <header className="hero">
         <img src={photo("hero", 2000)} alt="Friends laughing and playing outdoors" />
         <div className="hero-top"><div className="wrap nav-in"><span className="logo"><span className="logo-mark"><Compass size={18} /></span>GrassQuest</span></div></div>
@@ -63,7 +63,7 @@ export default function Landing({ onStart }) {
           <div style={{ marginTop: 36 }}><button className="btn primary big" onClick={onStart}>Let's go outside <ArrowRight size={18} /></button></div>
         </div>
       </section>
-    </>
+    </div>
   );
 }
 

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Check, Cpu, MapPin, RefreshCw, User, X } from "lucide-react";
 import { api } from "../lib/api.js";
-import { currentPlace } from "../lib/location.js";
+import { currentPlace, round } from "../lib/location.js";
+import MapView from "../components/MapView.jsx";
 import { detectGemma, MIN_MODEL } from "../lib/gemma.js";
 
 export default function Setup({ settings, existing = false, onDone }) {
@@ -26,13 +27,18 @@ export default function Setup({ settings, existing = false, onDone }) {
     setPlaceErr("");
     try {
       const p = await currentPlace();
-      const ctx = await api.context(p.lat, p.lon);
-      setPlace({ ...p, label: [ctx.area.name, ctx.area.city].filter(Boolean).join(", ") || "Your area" });
+      await choose(p);
     } catch (e) {
       setPlaceErr(e.message);
     } finally {
       setLocating(false);
     }
+  }
+
+  // Looks up the area name and starts mapping nearby places in the background
+  async function choose(p) {
+    const ctx = await api.context(p.lat, p.lon);
+    setPlace({ ...p, label: [ctx.area.name, ctx.area.city].filter(Boolean).join(", ") || "Your area" });
   }
 
   async function search(e) {
@@ -75,10 +81,18 @@ export default function Setup({ settings, existing = false, onDone }) {
         <div>
           <h3>Where you are</h3>
           {place ? (
-            <p className="muted" style={{ margin: 0 }}>{place.label} <button className="btn link" onClick={() => setPlace(null)}>change</button></p>
+            <>
+              <p className="muted" style={{ margin: "0 0 10px" }}>
+                {place.label}{place.accuracy ? ` · accurate to about ${place.accuracy} m` : ""} <button className="btn link" onClick={() => setPlace(null)}>change</button>
+              </p>
+              <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid var(--line)" }}>
+                <MapView center={place} zoom={16} onPick={(p) => setPlace((cur) => ({ ...cur, lat: round(p.lat), lon: round(p.lon), accuracy: null, moved: true }))} />
+              </div>
+              <p className="small muted" style={{ margin: "8px 0 0" }}>Not quite right? Tap the map where you actually are.{place.moved ? " Pin moved." : ""}</p>
+            </>
           ) : (
             <>
-              <p className="muted" style={{ margin: "0 0 10px" }}>Used for live weather and the real places near you. Rounded to about 1 km, never stored raw.</p>
+              <p className="muted" style={{ margin: "0 0 10px" }}>Used for live weather and the real places near you. Your exact spot is only used to measure distances and is never stored.</p>
               <button className="btn dark" onClick={locate} disabled={locating}>{locating ? "Finding you…" : "Use my location"}</button>
               <form onSubmit={search} className="field" style={{ marginTop: 14 }}>
                 <label className="small muted" htmlFor="city">Or search for your town</label>
@@ -90,7 +104,7 @@ export default function Setup({ settings, existing = false, onDone }) {
               {results.length > 0 && (
                 <div className="results">
                   {results.map((r) => (
-                    <button key={r.label} onClick={() => { setPlace({ lat: r.lat, lon: r.lon, label: r.label.split(",").slice(0, 2).join(",") }); setResults([]); }}>{r.label}</button>
+                    <button key={r.label} onClick={() => { setResults([]); choose({ lat: r.lat, lon: r.lon }).catch((e2) => setPlaceErr(e2.message)); }}>{r.label}</button>
                   ))}
                 </div>
               )}

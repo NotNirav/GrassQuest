@@ -2,10 +2,12 @@
 
 Free, keyless sources:
   Open-Meteo (weather + sunrise/sunset), OpenStreetMap Overpass (nearby places), Nominatim (area name / city search).
-Coordinates are rounded to a ~1 km cell before anything leaves the server or gets cached, and raw coordinates are never stored.
+Privacy: the exact position is only used in memory to measure distances. External lookups and caches use a ~1 km cell,
+and exact coordinates are never stored.
 """
 import logging
 import math
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -17,7 +19,11 @@ from . import db
 log = logging.getLogger(__name__)
 
 UA = {"User-Agent": "GrassQuest/0.2 (hackathon project; https://github.com/NotNirav/GrassQuest)"}
-RADIUS_M = 1500
+OVERPASS_MIRRORS = ["https://overpass-api.de/api/interpreter"]  # other public mirrors returned 500s when tested
+_fetching: set[str] = set()
+_fetch_lock = threading.Lock()
+RADIUS_M = 1500       # walking distance we offer
+FETCH_RADIUS_M = 2000  # fetched around the cell centre, so any point inside the cell still sees 1.5 km around it
 WEATHER_TTL_S = 20 * 60
 PLACES_TTL_S = 7 * 24 * 3600
 AREA_TTL_S = 30 * 24 * 3600
@@ -32,7 +38,6 @@ FEATURE_QUERIES = {
     "field": ['nwr["landuse"~"^(grass|meadow|recreation_ground|village_green)$"]', 'nwr["leisure"~"^(pitch|common)$"]'],
     "viewpoint": ['nwr["tourism"="viewpoint"]', 'nwr["natural"="peak"]'],
     "trail": ['way["highway"~"^(path|footway|track)$"]["name"]'],
-    "bench": ['node["amenity"="bench"]'],
     "cafe": ['nwr["amenity"="cafe"]["outdoor_seating"="yes"]', 'nwr["amenity"="ice_cream"]'],
 }
 GENERIC_NAME = {
@@ -153,50 +158,109 @@ def sun_phase(wx: dict) -> dict:
 
 
 # ---------- places ----------
-def places(lat: float, lon: float) -> dict:
-    clat, clon = cell(lat, lon)
-    key = f"pl:{clat}:{clon}"
-    hit = _cached(key, PLACES_TTL_S)
+def _overpass(query: str) -> list | None:
+    """One small query; retries busy servers (504/429) with a short back-off."""
+    for attempt in range(3):
+        for mirror in OVERPASS_MIRRORS:
+            try:
+                r = httpx.post(mirror, data={"data": query}, headers=UA, timeout=30)
+                if r.status_code == 200:
+                    return r.json().get("elements", [])
+                log.info("Overpass %s -> %s", mirror.split("/")[2], r.status_code)
+            except Exception as e:
+                log.info("Overpass %s -> %s", mirror.split("/")[2], type(e).__name__)
+        time.sleep(2 + 3 * attempt)
+    return None
+
+
+def _candidates(clat: float, clon: float) -> list[dict] | None:
+    """Every mapped place of interest around a ~1 km cell. One small query per category, two at a time
+    (the public server allows 2 concurrent queries). Full results cached for a week, partial ones for 10 minutes."""
+    key = f"pl3:{clat}:{clon}"
+    hit = _cached(key, PLACES_TTL_S) or _cached(key + ":partial", 600)
     if hit is not None:
         return hit
-    parts = []
-    for feature, qs in FEATURE_QUERIES.items():
-        for q in qs:
-            parts.append(f'{q}(around:{RADIUS_M},{clat},{clon});')
-    query = f"[out:json][timeout:25];({''.join(parts)});out center tags 400;"
-    try:
-        with sentry_sdk.start_span(op="http.client", name="Overpass"):
-            r = httpx.post("https://overpass-api.de/api/interpreter", data={"data": query}, headers=UA, timeout=30)
-            r.raise_for_status()
-        elements = r.json().get("elements", [])
-    except Exception:
-        log.warning("Overpass failed; continuing with street and sky quests only", exc_info=True)
-        return {}
+    dlat = FETCH_RADIUS_M / 111320
+    dlon = FETCH_RADIUS_M / (111320 * math.cos(math.radians(clat)))
+    bbox = f"{clat - dlat:.5f},{clon - dlon:.5f},{clat + dlat:.5f},{clon + dlon:.5f}"
+    queries = {f: f"[out:json][timeout:20][bbox:{bbox}];({''.join(q + ';' for q in qs)});out center qt 120;"
+               for f, qs in FEATURE_QUERIES.items()}
+    from concurrent.futures import ThreadPoolExecutor
 
+    with sentry_sdk.start_span(op="http.client", name="Overpass (per category)"):
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = dict(zip(queries, pool.map(_overpass, queries.values())))
+    out, failed = [], [f for f, els in results.items() if els is None]
+    for els in results.values():
+        for el in els or []:
+            tags = el.get("tags", {})
+            plat = el.get("lat") or el.get("center", {}).get("lat")
+            plon = el.get("lon") or el.get("center", {}).get("lon")
+            feature = _classify(tags)
+            if plat is not None and feature:
+                out.append({"f": feature, "name": tags.get("name") or tags.get("name:en"), "lat": round(plat, 5), "lon": round(plon, 5)})
+    if len(failed) == len(queries):
+        return None
+    _store(key + (":partial" if failed else ""), out)
+    if failed:
+        log.warning("Overpass: no data yet for %s", failed)
+    return out
+
+
+def _cached_candidates(clat: float, clon: float) -> list[dict] | None:
+    key = f"pl3:{clat}:{clon}"
+    return _cached(key, PLACES_TTL_S) or _cached(key + ":partial", 600)
+
+
+def warm_places(clat: float, clon: float) -> bool:
+    """Start fetching a cell's places in the background (the public Overpass server can take a minute when busy).
+    Returns True if the places are already cached."""
+    if _cached_candidates(clat, clon) is not None:
+        return True
+    key = f"{clat}:{clon}"
+    with _fetch_lock:
+        if key in _fetching:
+            return False
+        _fetching.add(key)
+
+    def run():
+        try:
+            _candidates(clat, clon)
+        finally:
+            with _fetch_lock:
+                _fetching.discard(key)
+
+    threading.Thread(target=run, daemon=True).start()
+    return False
+
+
+def places(lat: float, lon: float) -> tuple[dict, bool]:
+    """Best place per feature, measured from the player's exact position. Returns (places, still_loading)."""
+    clat, clon = cell(lat, lon)
+    cands = _cached_candidates(clat, clon)
+    loading = cands is None or bool(_cached(f"pl3:{clat}:{clon}:partial", 600))
+    if cands is None:
+        warm_places(clat, clon)
+        cands = []
     best: dict[str, dict] = {}
-    for el in elements:
-        tags = el.get("tags", {})
-        plat = el.get("lat") or el.get("center", {}).get("lat")
-        plon = el.get("lon") or el.get("center", {}).get("lon")
-        if plat is None:
+    for c in cands:
+        dist, bearing = _dist_bearing(lat, lon, c["lat"], c["lon"])
+        if dist > RADIUS_M:
             continue
-        feature = _classify(tags)
-        if not feature:
-            continue
-        dist, bearing = _dist_bearing(clat, clon, plat, plon)
-        name = tags.get("name") or tags.get("name:en")
-        cand = {"name": name, "dist_m": dist, "bearing": bearing, "lat": round(plat, 4), "lon": round(plon, 4)}
-        cur = best.get(feature)
-        # prefer named places, then closer ones
-        if cur is None or (bool(name), -dist) > (bool(cur["name"]), -cur["dist_m"]):
-            best[feature] = cand
-    # parks have trees and grass even when OSM doesn't tag them separately
+        cand = {"name": c["name"], "dist_m": dist, "bearing": bearing, "lat": c["lat"], "lon": c["lon"]}
+        cur = best.get(c["f"])
+        # a named place wins unless an unnamed one is much closer
+        score = dist - (400 if c["name"] else 0)
+        if cur is None or score < cur["_score"]:
+            best[c["f"]] = {**cand, "_score": score}
+    for v in best.values():
+        v.pop("_score")
+    # parks have trees, grass and benches even when OSM doesn't tag them separately
     if "park" in best:
-        best.setdefault("trees", {**best["park"]})
-        best.setdefault("field", {**best["park"]})
-        best.setdefault("bench", {**best["park"]})
-    _store(key, best)
-    return best
+        for f in ("trees", "field", "bench"):
+            if f not in best or best[f]["dist_m"] > best["park"]["dist_m"]:
+                best[f] = {**best["park"]}
+    return best, loading
 
 
 def _classify(tags: dict) -> str | None:
@@ -255,8 +319,9 @@ def search_city(q: str) -> list[dict]:
 def build(lat: float, lon: float) -> dict:
     clat, clon = cell(lat, lon)
     wx = weather(clat, clon)
-    pl = places(clat, clon)
+    pl, loading = places(lat, lon)  # exact point, in memory only
     return {
+        "places_loading": loading,
         "cell": [clat, clon],
         "area": area(clat, clon),
         "weather": wx,

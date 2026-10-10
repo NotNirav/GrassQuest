@@ -50,6 +50,13 @@ export default function Today({ settings, model, player, onPlayer, onFocus }) {
   }, [settings.userId, settings.place, onPlayer]);
 
   useEffect(() => { if (!active) load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // First visit to an area: nearby places are still being fetched, so refresh once they're likely ready
+  useEffect(() => {
+    if (!data?.context.places_loading || selected) return;
+    const id = setTimeout(() => load(), 30000);
+    return () => clearTimeout(id);
+  }, [data, selected, load]);
   useEffect(() => { onFocus(active?.stage === "out"); }, [active?.stage, onFocus]);
 
   // Gemma pre-writes the sweet spot's briefing while the player is still reading the cards
@@ -109,6 +116,10 @@ export default function Today({ settings, model, player, onPlayer, onFocus }) {
         <div className="card" style={{ marginBottom: 18, display: "flex", gap: 12, alignItems: "center", background: "var(--signal-soft)", boxShadow: "none" }}>
           <CloudRain /> <div><b>Rain check.</b> It's rough out there ({ctx.weather.label}). Here are quests you can do from a window or doorway, and your streak is safe: we've added a free freeze.</div>
         </div>
+      )}
+
+      {data?.context.places_loading && (
+        <div className="pill" style={{ marginBottom: 14 }}><span className="spinner" style={{ width: 14, height: 14 }} /> Still mapping the parks, water and trails around you. More quests will appear shortly.</div>
       )}
 
       {error && <div className="card"><p className="error" style={{ marginTop: 0 }}>{error}</p><button className="btn" onClick={() => load()}><RefreshCw size={16} /> Try again</button></div>}

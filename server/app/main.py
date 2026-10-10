@@ -88,7 +88,7 @@ class Where(BaseModel):
 
 
 def ctx_view(ctx: dict) -> dict:
-    return {k: ctx[k] for k in ("cell", "area", "weather", "sun", "places", "features")}
+    return {k: ctx[k] for k in ("cell", "area", "weather", "sun", "places", "features", "places_loading")}  # no exact coordinates
 
 
 @app.post("/api/context")

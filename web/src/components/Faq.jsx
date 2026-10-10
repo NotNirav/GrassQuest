@@ -5,7 +5,7 @@ const ITEMS = [
   ["How do I install the model?", <>Install Ollama, then run <code>ollama pull gemma4:e2b</code> in a terminal. GrassQuest finds it automatically.</>],
   ["It says Ollama is blocked. What now?", <>Ollama only answers websites you allow. Quit Ollama, run <code>{`setx OLLAMA_ORIGINS "${ORIGIN}"`}</code> (Windows) or <code>{`launchctl setenv OLLAMA_ORIGINS "${ORIGIN}"`}</code> (macOS), then start Ollama again. On <code>localhost</code> this usually isn't needed.</>],
   ["Do my photos get uploaded?", "No. Gemma judges them on your computer. The server only receives the verdict (pass, close, or not yet) and the name of anything Gemma identified."],
-  ["What happens with my location?", "It's rounded to about 1 km before it leaves your browser, and only used to look up weather and nearby public places. Raw coordinates are never stored."],
+  ["What happens with my location?", "Your exact spot is used only to measure how far nearby parks and ponds are, and is never stored. Weather and map lookups use an area of about 1 km. If the browser guesses wrong, tap the map in setup to move your pin."],
   ["How strict is the judge?", "Not very. There's no prize money, so any honest outdoor photo that fits the quest passes. Close-but-not-quite pays half."],
   ["What if the weather is terrible?", "GrassQuest won't send you into a storm. You'll get a short rain-check quest from your window or doorway, plus a free streak freeze."],
   ["What are Seeds for?", "Seeds build your Basecamp (tent to treehouse, campfire to bonfire, a fox, an owl…) and buy streak freezes for days you can't get out."],

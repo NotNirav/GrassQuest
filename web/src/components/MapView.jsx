@@ -6,17 +6,26 @@ import "maplibre-gl/dist/maplibre-gl.css";
 const STYLE = "https://tiles.openfreemap.org/styles/positron";
 
 /** You (rounded to ~1 km) and where the quest sends you. */
-export default function MapView({ center, destination }) {
+export default function MapView({ center, destination, onPick, zoom = 14 }) {
   const el = useRef(null);
   const map = useRef(null);
 
   useEffect(() => {
     if (!el.current || !center) return;
-    const m = new maplibregl.Map({ container: el.current, style: STYLE, center: [center.lon, center.lat], zoom: 14, attributionControl: { compact: true } });
+    const m = new maplibregl.Map({ container: el.current, style: STYLE, center: [center.lon, center.lat], zoom, attributionControl: { compact: true } });
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     map.current = m;
     return () => m.remove();
-  }, [center?.lat, center?.lon]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !onPick) return;
+    m.getCanvas().style.cursor = "crosshair";
+    const handler = (e) => onPick({ lat: e.lngLat.lat, lon: e.lngLat.lng });
+    m.on("click", handler);
+    return () => m.off("click", handler);
+  }, [onPick]);
 
   useEffect(() => {
     const m = map.current;
@@ -32,7 +41,7 @@ export default function MapView({ center, destination }) {
       const b = new maplibregl.LngLatBounds([center.lon, center.lat], [center.lon, center.lat]).extend([destination.lon, destination.lat]);
       m.fitBounds(b, { padding: 60, maxZoom: 16, duration: 600 });
     } else {
-      m.easeTo({ center: [center.lon, center.lat], zoom: 15, duration: 600 });
+      m.easeTo({ center: [center.lon, center.lat], zoom: Math.max(m.getZoom(), 15), duration: 600 });
     }
     return () => markers.forEach((mk) => mk.remove());
   }, [center?.lat, center?.lon, destination?.lat, destination?.lon]); // eslint-disable-line react-hooks/exhaustive-deps

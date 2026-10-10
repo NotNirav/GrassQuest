@@ -117,3 +117,16 @@ generic green look. Rebuilt from PLAN.md.
   as "right idea but incomplete" and making Gemma name the thing before classifying it. Re-test: puddle -> "no", bird -> pass,
   "Eurasian Blue Tit", kind bird.
 - ElevenLabs runtime generation disabled (cap 0) until the pre-made Ranger lines are approved.
+
+## 2026-10-11 (early) — precise location, even landing, Overpass reliability
+
+- User: detected location wasn't accurate. Cause was mostly my own privacy rounding (0.01° ≈ 1.1 km), so distances could be
+  ~700 m off. Now: browser high-accuracy position kept to ~1 m in the browser, sent only to measure distances, never stored.
+  Weather/map lookups and caches still use the ~1 km cell. Setup shows a map; tapping it moves the pin.
+  Same cell, two points: Lotus Pond 767 m (rounded) vs 204 m (exact).
+- User: landing "viewports uneven". Hero was 92vh (a strip of the next section peeked in) and sections were 838/570/908 px.
+  Now every landing section is exactly one screen (900/900/900/900 at 1440×900), tiles equal height, soft scroll snap.
+- Overpass (OSM) is free but flaky: big union query -> 504; mirrors kumi/private.coffee -> 500; after testing -> 429.
+  One cold lookup took 186 s with retries. Fix: one small bbox query per category, 2 at a time, retries with back-off,
+  run in a background thread (started at setup), partial results cached 10 min, full results 7 days.
+  Today screen shows "still mapping" and refreshes once; quests never wait on Overpass.
