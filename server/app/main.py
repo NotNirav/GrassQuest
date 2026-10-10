@@ -297,8 +297,13 @@ def badges():
 # ---------- leaderboard ----------
 @app.get("/api/leaderboard")
 def leaderboard(scope: str = "week", today: str | None = None, area: str | None = None):
+    if scope in ("all", "area"):
+        q = {"area": area} if scope == "area" and area else {}
+        return [{"id": u["_id"], "handle": u["handle"], "xp": u.get("xp", 0), "quests": u.get("completed", 0), "area": u.get("area"),
+                 "level": game.level_for(u.get("xp", 0)), "cards": len(u.get("field_guide", {}))}
+                for u in db.users.find(q).sort([("xp", -1), ("created_at", 1)]).limit(50)]
     match = {"outcome": "pass", "synthetic": {"$ne": True}}
-    if scope in ("week", "area"):
+    if scope == "week":
         d = date.fromisoformat(today) if today else date.today()
         match["local_date"] = {"$gte": (d - timedelta(days=d.weekday())).isoformat()}
     rows = list(db.attempts.aggregate([
@@ -310,7 +315,7 @@ def leaderboard(scope: str = "week", today: str | None = None, area: str | None 
     out = []
     for r in rows:
         u = users.get(r["_id"])
-        if not u or (scope == "area" and area and u.get("area") != area):
+        if not u:
             continue
         out.append({"id": r["_id"], "handle": u["handle"], "xp": r["xp"], "quests": r["quests"], "area": u.get("area"),
                     "level": game.level_for(u.get("xp", 0)), "cards": len(u.get("field_guide", {}))})

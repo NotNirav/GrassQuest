@@ -22,8 +22,8 @@ UA = {"User-Agent": "GrassQuest/0.2 (hackathon project; https://github.com/NotNi
 OVERPASS_MIRRORS = ["https://overpass-api.de/api/interpreter"]  # other public mirrors returned 500s when tested
 _fetching: set[str] = set()
 _fetch_lock = threading.Lock()
-RADIUS_M = 1500       # walking distance we offer
-FETCH_RADIUS_M = 2000  # fetched around the cell centre, so any point inside the cell still sees 1.5 km around it
+RADIUS_M = 2500       # walking distance we offer (wide enough for sparsely mapped suburbs)
+FETCH_RADIUS_M = 3000  # fetched around the cell centre, so any point inside the cell still sees 2.5 km around it
 WEATHER_TTL_S = 20 * 60
 PLACES_TTL_S = 7 * 24 * 3600
 AREA_TTL_S = 30 * 24 * 3600
@@ -158,58 +158,73 @@ def sun_phase(wx: dict) -> dict:
 
 
 # ---------- places ----------
-def _overpass(query: str) -> list | None:
-    """One small query; retries busy servers (504/429) with a short back-off."""
-    for attempt in range(3):
+def _overpass(query: str, deadline: float) -> list | None:
+    """One query, retried while time is left before the deadline (the public server answers 504/429 when busy)."""
+    attempt = 0
+    while time.time() < deadline - 5:
         for mirror in OVERPASS_MIRRORS:
+            left = deadline - time.time()
+            if left < 5:
+                return None
             try:
-                r = httpx.post(mirror, data={"data": query}, headers=UA, timeout=30)
+                r = httpx.post(mirror, data={"data": query}, headers=UA, timeout=min(30, left))
                 if r.status_code == 200:
                     return r.json().get("elements", [])
-                log.info("Overpass %s -> %s", mirror.split("/")[2], r.status_code)
+                log.warning("Overpass %s -> %s", mirror.split("/")[2], r.status_code)
             except Exception as e:
-                log.info("Overpass %s -> %s", mirror.split("/")[2], type(e).__name__)
-        time.sleep(2 + 3 * attempt)
+                log.warning("Overpass %s -> %s", mirror.split("/")[2], type(e).__name__)
+        attempt += 1
+        time.sleep(min(2 + 3 * attempt, max(0, deadline - time.time() - 5)))
     return None
 
 
+# three grouped queries instead of one per category: fewer requests to a busy free server
+GROUPS = {
+    "green": ["park", "garden", "playground", "trees", "field"],
+    "water": ["water"],
+    "other": ["viewpoint", "trail", "cafe"],
+}
+LOOKUP_BUDGET_S = 75
+
+
 def _candidates(clat: float, clon: float) -> list[dict] | None:
-    """Every mapped place of interest around a ~1 km cell. One small query per category, two at a time
-    (the public server allows 2 concurrent queries). Full results cached for a week, partial ones for 10 minutes."""
-    key = f"pl3:{clat}:{clon}"
-    hit = _cached(key, PLACES_TTL_S) or _cached(key + ":partial", 600)
-    if hit is not None:
-        return hit
+    """Every mapped place of interest around a ~1 km cell, fetched within LOOKUP_BUDGET_S.
+    Full results cached for a week, partial ones for 10 minutes, total failure noted for 10 minutes."""
+    key = f"pl4:{clat}:{clon}"
     dlat = FETCH_RADIUS_M / 111320
     dlon = FETCH_RADIUS_M / (111320 * math.cos(math.radians(clat)))
     bbox = f"{clat - dlat:.5f},{clon - dlon:.5f},{clat + dlat:.5f},{clon + dlon:.5f}"
-    queries = {f: f"[out:json][timeout:20][bbox:{bbox}];({''.join(q + ';' for q in qs)});out center qt 120;"
-               for f, qs in FEATURE_QUERIES.items()}
-    from concurrent.futures import ThreadPoolExecutor
-
-    with sentry_sdk.start_span(op="http.client", name="Overpass (per category)"):
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            results = dict(zip(queries, pool.map(_overpass, queries.values())))
-    out, failed = [], [f for f, els in results.items() if els is None]
-    for els in results.values():
-        for el in els or []:
-            tags = el.get("tags", {})
-            plat = el.get("lat") or el.get("center", {}).get("lat")
-            plon = el.get("lon") or el.get("center", {}).get("lon")
-            feature = _classify(tags)
-            if plat is not None and feature:
-                out.append({"f": feature, "name": tags.get("name") or tags.get("name:en"), "lat": round(plat, 5), "lon": round(plon, 5)})
-    if len(failed) == len(queries):
+    deadline = time.time() + LOOKUP_BUDGET_S
+    out, failed = [], []
+    with sentry_sdk.start_span(op="http.client", name="Overpass (3 grouped queries)"):
+        for group, features in GROUPS.items():
+            body = "".join(q + ";" for f in features for q in FEATURE_QUERIES[f])
+            els = _overpass(f"[out:json][timeout:25][bbox:{bbox}];({body});out center qt 250;", deadline)
+            if els is None:
+                failed.append(group)
+                continue
+            for el in els:
+                tags = el.get("tags", {})
+                plat = el.get("lat") or el.get("center", {}).get("lat")
+                plon = el.get("lon") or el.get("center", {}).get("lon")
+                feature = _classify(tags)
+                if plat is not None and feature:
+                    out.append({"f": feature, "name": tags.get("name") or tags.get("name:en"), "lat": round(plat, 5), "lon": round(plon, 5)})
+    if len(failed) == len(GROUPS):
+        _store(key + ":failed", True)
+        log.warning("Overpass: no data for %s,%s; street and sky quests only for now", clat, clon)
         return None
     _store(key + (":partial" if failed else ""), out)
-    if failed:
-        log.warning("Overpass: no data yet for %s", failed)
+    log.warning("Overpass: %d places for %s,%s%s", len(out), clat, clon, f" (missing {failed})" if failed else "")
     return out
 
 
 def _cached_candidates(clat: float, clon: float) -> list[dict] | None:
-    key = f"pl3:{clat}:{clon}"
-    return _cached(key, PLACES_TTL_S) or _cached(key + ":partial", 600)
+    key = f"pl4:{clat}:{clon}"
+    hit = _cached(key, PLACES_TTL_S) or _cached(key + ":partial", 600)
+    if hit is None and _cached(key + ":failed", 600) is not None:
+        return []  # the last lookup failed: carry on with street and sky quests, try again in 10 minutes
+    return hit
 
 
 def warm_places(clat: float, clon: float) -> bool:
@@ -238,7 +253,7 @@ def places(lat: float, lon: float) -> tuple[dict, bool]:
     """Best place per feature, measured from the player's exact position. Returns (places, still_loading)."""
     clat, clon = cell(lat, lon)
     cands = _cached_candidates(clat, clon)
-    loading = cands is None or bool(_cached(f"pl3:{clat}:{clon}:partial", 600))
+    loading = cands is None  # only while the very first lookup for this area is still running
     if cands is None:
         warm_places(clat, clon)
         cands = []

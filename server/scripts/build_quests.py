@@ -70,8 +70,17 @@ def embed(text: str) -> list[float]:
 
 def main():
     quests = expand()
-    templates = [{"_id": t["id"], "id": t["id"], "title": t["t"], "cat": t["cat"],
-                  "embedding": embed(f"{t['t']}. {t['proof']}")} for t in T]
+    # reuse embeddings from the last build; only new templates go to bge-m3
+    try:
+        old = {x["_id"]: x["embedding"] for x in json.load(open(f"{OUT}/templates_v2.json", encoding="utf-8"))}
+    except FileNotFoundError:
+        old = {}
+    templates = []
+    for i, t in enumerate(T):
+        emb = old.get(t["id"]) or embed(f"{t['t']}. {t['proof']}")
+        templates.append({"_id": t["id"], "id": t["id"], "title": t["t"], "cat": t["cat"], "embedding": emb})
+        if t["id"] not in old:
+            print(f"embedded {i + 1}/{len(T)} {t['id']}", flush=True)
     json.dump(quests, open(f"{OUT}/quests_v2.json", "w", encoding="utf-8"))
     json.dump(templates, open(f"{OUT}/templates_v2.json", "w", encoding="utf-8"))
     by_cat = {}

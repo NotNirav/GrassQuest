@@ -1,4 +1,5 @@
-import { ArrowRight, Compass } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import Logo from "../components/Logo.jsx";
 import { photo } from "../lib/photos.js";
 import Topo from "../components/Topo.jsx";
 import Faq from "../components/Faq.jsx";
@@ -8,7 +9,7 @@ export default function Landing({ onStart }) {
     <div className="landing">
       <header className="hero">
         <img src={photo("hero", 2000)} alt="Friends laughing and playing outdoors" />
-        <div className="hero-top"><div className="wrap nav-in"><span className="logo"><span className="logo-mark"><Compass size={18} /></span>GrassQuest</span></div></div>
+        <div className="hero-top"><div className="wrap nav-in"><Logo light /></div></div>
         <div className="wrap hero-in">
           <div className="kicker" style={{ color: "rgba(255,255,255,.8)" }}>Open-source AI · Touch Grass</div>
           <h1>Your street is a <em>quest map.</em></h1>

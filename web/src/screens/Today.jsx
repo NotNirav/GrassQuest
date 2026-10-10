@@ -24,6 +24,7 @@ export default function Today({ settings, model, player, onPlayer, onFocus }) {
   const [active, setActive] = useState(loadActive); // { choice, brief, ctx, startedAt, stage }
   const [result, setResult] = useState(null);
   const briefs = useRef({}); // offer_id -> Promise<briefing>, so each one is written once
+  const shown = useRef([]); // templates already offered this session, so rerolls bring genuinely new quests
 
   const briefingFor = useCallback((choice, ctx) => {
     if (!briefs.current[choice.offer_id]) {
@@ -82,6 +83,7 @@ export default function Today({ settings, model, player, onPlayer, onFocus }) {
   }
 
   function finish() {
+    shown.current = [];
     update(null);
     setResult(null);
     load();
@@ -119,7 +121,7 @@ export default function Today({ settings, model, player, onPlayer, onFocus }) {
       )}
 
       {data?.context.places_loading && (
-        <div className="pill" style={{ marginBottom: 14 }}><span className="spinner" style={{ width: 14, height: 14 }} /> Still mapping the parks, water and trails around you. More quests will appear shortly.</div>
+        <div className="pill" style={{ marginBottom: 14 }}><span className="spinner" style={{ width: 14, height: 14 }} /> First time here: mapping the parks, water and trails around you. Place quests will appear within a minute or two.</div>
       )}
 
       {error && <div className="card"><p className="error" style={{ marginTop: 0 }}>{error}</p><button className="btn" onClick={() => load()}><RefreshCw size={16} /> Try again</button></div>}
@@ -150,7 +152,7 @@ export default function Today({ settings, model, player, onPlayer, onFocus }) {
           </div>
           {!loading && data && (
             <div className="actions" style={{ marginTop: 14 }}>
-              <button className="btn quiet" onClick={() => load(data.choices.map((c) => c.quest._id))}><RefreshCw size={16} /> Three different quests</button>
+              <button className="btn quiet" onClick={() => { shown.current = [...shown.current, ...data.choices.map((c) => c.quest.template_id)].slice(-15); load(shown.current); }}><RefreshCw size={16} /> Three different quests</button>
               <span className="small muted">{data.choices[0]?.source === "tabpfn" ? "Odds and minutes predicted by TabPFN" : "Odds are a starter estimate"}</span>
             </div>
           )}

@@ -3,6 +3,11 @@ import { BookOpen } from "lucide-react";
 import FieldCard from "../components/FieldCard.jsx";
 
 const FILTERS = ["all", "bird", "tree", "plant", "insect", "sky"];
+const EXAMPLES = [
+  { key: "ex-1", kind: "bird", name: "Common Myna", fact: "Mynas can imitate car alarms and human speech.", rarity: "common", first_seen: "Example", area: null },
+  { key: "ex-2", kind: "tree", name: "Neem tree", fact: "Neem twigs were used as toothbrushes for thousands of years.", rarity: "common", first_seen: "Example", area: null },
+  { key: "ex-3", kind: "insect", name: "Common Crow butterfly", fact: "Birds avoid it because its body stores bitter toxins from its food plants.", rarity: "uncommon", first_seen: "Example", area: null },
+];
 
 export default function FieldGuide({ player }) {
   const [f, setF] = useState("all");
@@ -18,11 +23,14 @@ export default function FieldGuide({ player }) {
       {cards.length ? (
         <div className="cards">{cards.map((c) => <FieldCard key={c.key} card={c} />)}</div>
       ) : (
-        <div className="card empty">
-          <BookOpen size={36} />
-          <h2 style={{ fontSize: "1.8rem", margin: "10px 0 6px" }}>No cards yet</h2>
-          <p className="muted">When Gemma spots a bird, tree, flower or bug in your proof photo, it lands here with a fun fact. Collect your whole neighbourhood.</p>
-        </div>
+        <>
+          <div className="card empty" style={{ marginBottom: 18 }}>
+            <BookOpen size={36} />
+            <h2 style={{ fontSize: "1.8rem", margin: "10px 0 6px" }}>No cards yet</h2>
+            <p className="muted" style={{ marginBottom: 0 }}>When Gemma spots a bird, tree, flower or bug in your proof photo, it lands here with a fun fact. Collect your whole neighbourhood. Here's what cards look like:</p>
+          </div>
+          <div className="cards" style={{ opacity: 0.55 }}>{EXAMPLES.map((c) => <FieldCard key={c.key} card={c} />)}</div>
+        </>
       )}
     </div>
   );

@@ -130,3 +130,21 @@ generic green look. Rebuilt from PLAN.md.
   One cold lookup took 186 s with retries. Fix: one small bbox query per category, 2 at a time, retries with back-off,
   run in a background thread (started at setup), partial results cached 10 min, full results 7 days.
   Today screen shows "still mapping" and refreshes once; quests never wait on Overpass.
+
+## 2026-10-11 (night playtest by Nirav) — fixes
+
+- "Still mapping…" for 20 min: a lookup that got most categories but missed one was cached as partial and still flagged
+  "loading", so the banner never cleared and the page refreshed every 30 s. Now partial = done; total failure is noted for
+  10 min (street + sky quests meanwhile). Area lookup capped at 75 s using 3 grouped Overpass queries.
+  Tonight the public Overpass server returned 504 for the entire 75 s window. Photon/Nominatim respond in <1 s but found no
+  named parks within ~6 km of the stored spot, which suggests the desktop browser guessed the location from the ISP.
+  The setup map's tap-to-move pin is the remedy.
+- "Same quests again": at night only 7 of 92 templates were possible in that area, and rerolls excluded quest ids, so the
+  same templates came back with different numbers (10/15/20-minute run). Added 30 templates (night, streets, anywhere):
+  122 templates -> 782 quests; 151 eligible at night there (was 36). Rerolls now exclude templates, and the three choices
+  come from different categories. Test: 4 rerolls -> 12 distinct templates, 0 repeats.
+- Leaderboard verified with two separate test players (both appear on week/all/area boards). All-time and area boards now
+  list every player, including 0 XP, so new players see themselves straight away.
+- Test helpers on NotNirav (marked demo): +600 Seeds, 6 demo Field Guide cards. Remove before submission.
+- New logo: a map pin with three grass blades inside, on signal orange; also the favicon.
+- Build script reuses old template embeddings (a full rebuild stalled when Ollama kept swapping Gemma and bge-m3).

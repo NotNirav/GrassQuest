@@ -100,9 +100,10 @@ def blocked_templates(user_id: str) -> tuple[set[str], list[str], list[str]]:
 # ---------- 3. choose ----------
 def candidates(user_id: str, pool: list[dict], exclude: list[str]) -> tuple[list[dict], dict]:
     blocked, recent, dupes = blocked_templates(user_id)
-    fresh = [q for q in pool if q["template_id"] not in blocked and q["_id"] not in exclude]
+    skip = set(exclude)  # template ids the player just rerolled away from
+    fresh = [q for q in pool if q["template_id"] not in blocked | skip]
     if len(fresh) < 6:  # played everything nearby recently: relax the dedupe
-        fresh = [q for q in pool if q["template_id"] not in set(recent[:2]) and q["_id"] not in exclude] or pool
+        fresh = [q for q in pool if q["template_id"] not in skip | set(recent[:2])] or [q for q in pool if q["template_id"] not in skip] or pool
     # one quest per template keeps the shortlist varied; then cap it so a TabPFN call stays small
     random.shuffle(fresh)
     seen, varied = set(), []
@@ -114,14 +115,16 @@ def candidates(user_id: str, pool: list[dict], exclude: list[str]) -> tuple[list
 
 
 def three_choices(scored: list[tuple[dict, dict]]) -> list[tuple[str, dict, dict]]:
-    """scored = [(quest, score)]. Returns [(slot, quest, score)] for easy / sweet / stretch."""
+    """scored = [(quest, score)]. Returns [(slot, quest, score)] for easy / sweet / stretch, each from a different category."""
     if not scored:
         return []
     by_p = sorted(scored, key=lambda qs: qs[1]["p"], reverse=True)
     sweet = min(scored, key=lambda qs: abs(qs[1]["p"] - SWEET_SPOT) - 0.02 * qs[0]["effort"])
-    rest = [qs for qs in by_p if qs[0]["_id"] != sweet[0]["_id"]]
+    others = [qs for qs in by_p if qs[0]["cat"] != sweet[0]["cat"]]
+    rest = [qs for qs in (others if len(others) >= 2 else by_p) if qs[0]["_id"] != sweet[0]["_id"]]
     easy = rest[0] if rest else None
-    realistic = [qs for qs in rest[1:] if qs[1]["p"] >= 0.15] or rest[1:]
+    pool = [qs for qs in rest[1:] if not easy or qs[0]["cat"] != easy[0]["cat"]] or rest[1:]
+    realistic = [qs for qs in pool if qs[1]["p"] >= 0.15] or pool
     stretch = max(realistic, key=lambda qs: (qs[0]["effort"], -qs[1]["p"])) if realistic else None
     out = [("sweet", *sweet)]
     if easy:

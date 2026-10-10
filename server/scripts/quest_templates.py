@@ -134,3 +134,39 @@ T = [
     dict(id="balcony-plant", t="Find a plant enjoying the rain", cat="rain", needs=[], effort=1, min=5, time="day", wet=True, rain=True, kind="plant", proof="The wet plant"),
     dict(id="doorway-air", t="Step to your doorway and take 10 deep breaths of fresh air", cat="rain", needs=[], effort=1, min=3, time="any", wet=True, rain=True, proof="The outside, from your doorway"),
 ]
+
+# ---------- more variety: night, streets, anywhere (added after the first playtest: nights only had 7 templates) ----------
+T += [
+    # night
+    dict(id="night-walk", t="Take a {n}-minute walk under the street lights", cat="move", needs=[], effort=2, min=15, time="night", proof="Your street at night", params={"n": [10, 15, 20]}),
+    dict(id="moon-find", t="Find the moon tonight and photograph it", cat="sky", needs=[], effort=2, min=10, time="night", kind="sky", proof="The moon, any size"),
+    dict(id="moth-lamp", t="Find a moth or insect circling a light", cat="nature", needs=[], effort=3, min=15, time="night", kind="insect", proof="The bug near the lamp"),
+    dict(id="night-sounds", t="Stand outside for 3 minutes and name {n} night sounds", cat="mindful", needs=[], effort=1, min=5, time="night", proof="Where you stood", params={"n": [3, 5]}),
+    dict(id="lit-window", t="Find the most interesting lit-up window or sign on your street", cat="explore", needs=[], effort=2, min=15, time="night", proof="The glowing window or sign"),
+    dict(id="night-silhouette", t="Photograph a tree silhouette against the night sky", cat="photo", needs=["trees"], effort=2, min=15, time="night", kind="tree", proof="Dark branches against the sky"),
+    dict(id="constellation", t="Find a pattern in the stars and give it your own name", cat="sky", needs=[], effort=2, min=15, time="night", kind="sky", proof="The night sky"),
+    dict(id="night-air", t="Step out for 5 minutes of night air, phone in pocket", cat="mindful", needs=[], effort=1, min=5, time="night", proof="Your doorstep at night"),
+    dict(id="light-trails", t="Watch traffic lights change {n} times from a street corner", cat="explore", needs=[], effort=1, min=10, time="night", proof="The street corner", params={"n": [3, 5]}),
+    dict(id="night-cat", t="Spot a cat or dog out at night", cat="social", needs=[], effort=2, min=15, time="night", kind="animal", proof="The animal (from a respectful distance)"),
+    dict(id="shadow-lamp", t="Make a shadow puppet under a street lamp", cat="photo", needs=[], effort=1, min=10, time="night", proof="Your shadow puppet on the ground"),
+    dict(id="frogs", t="Listen for frogs or crickets near {place}", cat="water", needs=["water"], effort=3, min=20, time="night", proof="The water at night"),
+    # streets, any time
+    dict(id="doorstep-sky", t="Look up from your doorstep for 2 full minutes", cat="sky", needs=[], effort=1, min=3, time="any", kind="sky", proof="The sky above your door"),
+    dict(id="street-tree", t="Find the biggest tree on your street", cat="nature", needs=[], effort=1, min=10, time="day", kind="tree", proof="The tree"),
+    dict(id="street-flower", t="Find a flower growing in a pot, balcony or wall", cat="nature", needs=[], effort=1, min=10, time="day", kind="plant", proof="The flower"),
+    dict(id="block-loop", t="Walk once around your block", cat="move", needs=[], effort=1, min=10, time="any", proof="Any corner of your block"),
+    dict(id="steps-count", t="Walk {n} steps away from home and photograph what's there", cat="explore", needs=[], effort=2, min=15, time="any", proof="Whatever you found", params={"n": [500, 1000, 2000]}),
+    dict(id="chai-walk", t="Walk to get a tea, coffee or juice, and drink it outside", cat="food", needs=[], effort=2, min=20, time="any", proof="The drink outdoors"),
+    dict(id="street-food", t="Try a snack from a street stall or local shop, eaten outside", cat="food", needs=[], effort=2, min=20, time="any", proof="The snack outside"),
+    dict(id="sign-hunt", t="Find the funniest or strangest sign near you", cat="explore", needs=[], effort=2, min=20, time="day", proof="The sign"),
+    dict(id="vehicle-color", t="Count {color} vehicles until you reach {n}", cat="explore", needs=[], effort=1, min=10, time="any", proof="The street you watched", params={"color": ["red", "yellow", "white"], "n": [5, 10]}),
+    dict(id="rooftop", t="Go up to your roof, terrace or balcony and look at the horizon", cat="sky", needs=[], effort=1, min=10, time="any", kind="sky", proof="The horizon"),
+    dict(id="neighbour-plant", t="Find the most impressive plant someone is growing in your area", cat="nature", needs=[], effort=2, min=15, time="day", kind="plant", proof="The plant (from the street)"),
+    dict(id="stray-friend", t="Spot a bird, squirrel or stray animal in your lane", cat="birds", needs=[], effort=2, min=15, time="day", kind="animal", proof="The animal"),
+    dict(id="local-temple", t="Walk to the nearest temple, mosque, church or community place and sit outside it", cat="explore", needs=[], effort=2, min=25, time="any", proof="The outside of the place"),
+    dict(id="market-walk", t="Walk through your nearest market without buying anything", cat="explore", needs=[], effort=2, min=25, time="day", proof="The market street"),
+    dict(id="sunrise", t="Be outside for sunrise", cat="sky", needs=[], effort=4, min=20, time="morning", kind="sky", proof="The early sky"),
+    dict(id="dew", t="Find dew drops on a leaf or grass", cat="nature", needs=[], effort=2, min=10, time="morning", kind="plant", proof="The dew"),
+    dict(id="dog-walk-along", t="Offer to walk a friend's or neighbour's dog", cat="social", needs=[], effort=3, min=30, time="day", kind="animal", proof="The dog on the walk"),
+    dict(id="photo-walk", t="Take {n} photos of things you've never noticed on your street", cat="photo", needs=[], effort=2, min=20, time="day", proof="Your favourite of them", params={"n": [3, 5]}),
+]

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { BookOpen, Coins, Compass, Flame, Map, Tent, Trophy, User } from "lucide-react";
+import { BookOpen, Coins, Flame, Map, Tent, Trophy, User } from "lucide-react";
+import Logo from "./components/Logo.jsx";
 import { api } from "./lib/api.js";
 import { detectGemma, warmUp } from "./lib/gemma.js";
 import { loadSettings, saveSettings } from "./lib/settings.js";
@@ -102,7 +103,7 @@ function Nav({ children }) {
   return (
     <header className="nav">
       <div className="wrap nav-in">
-        <span className="logo"><span className="logo-mark"><Compass size={18} /></span>GrassQuest</span>
+        <Logo />
         {children}
       </div>
     </header>
