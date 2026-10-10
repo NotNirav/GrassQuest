@@ -52,7 +52,7 @@ export default function App() {
     <div className="shell">
       {!focus && (
         <header className="topbar">
-          <div className="brand"><span className="brand-mark">🌿</span>Side Quests</div>
+          <div className="brand"><span className="brand-mark">🌿</span>GrassQuest</div>
           <nav className="nav" aria-label="Main">
             {TABS.map(([key, label]) => (
               <button key={key} aria-current={tab === key ? "page" : undefined} onClick={() => setTab(key)}>{label}</button>

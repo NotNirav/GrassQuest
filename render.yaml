@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: side-quests-api
+    name: grassquest-api
     runtime: python
     rootDir: server
     buildCommand: pip install -r requirements.txt
@@ -20,7 +20,7 @@ services:
       - key: CORS_ORIGINS
         sync: false
   - type: web
-    name: side-quests-web
+    name: grassquest-web
     runtime: static
     rootDir: web
     buildCommand: npm ci && npm run build

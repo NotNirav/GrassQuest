@@ -1,4 +1,4 @@
-# 🌿 Side Quests
+# 🌿 GrassQuest
 
 Tiny real-world quests that get you off the screen. Get a quest, go outside, come back with a photo, and **Gemma, an open-weight model running on your own computer through Ollama**, judges whether you did it. Your photo never leaves your machine.
 
@@ -64,13 +64,13 @@ npm run dev                   # http://localhost:5173
 
 ## Using the hosted site with your Ollama
 
-Ollama blocks requests from websites it doesn't know. Allow the Side Quests site once, then restart Ollama:
+Ollama blocks requests from websites it doesn't know. Allow the GrassQuest site once, then restart Ollama:
 
 ```powershell
-setx OLLAMA_ORIGINS "https://<your-site>.onrender.com"     # Windows
+setx OLLAMA_ORIGINS "https://grassquest-web.onrender.com"     # Windows
 ```
 ```bash
-launchctl setenv OLLAMA_ORIGINS "https://<your-site>.onrender.com"   # macOS
+launchctl setenv OLLAMA_ORIGINS "https://grassquest-web.onrender.com"   # macOS
 ```
 
 ## Seeding Atlas
@@ -81,6 +81,16 @@ python -m scripts.seed embed       # (optional) re-embed quests with local bge-m
 python -m scripts.seed load        # upsert quests + create the vector search index
 python -m scripts.seed synthetic   # 300 rows marked synthetic=True for TabPFN cold start
 ```
+
+## Staying inside free tiers
+
+| Service | Real free limit | Where GrassQuest stops |
+|---|---|---|
+| TabPFN | 5M tokens/day, 20M/month (each prediction = 10k tokens) | 3.75M/day, 15M/month hosted · 2.5M / 10M locally. Pauses until the official reset, then resumes |
+| ElevenLabs | 10k credits/month | ~7k credits hosted · ~5k locally. Falls back to the browser's voice |
+
+Usage is tracked in MongoDB (shared by every running copy) and checked against each provider's own usage counter.
+TabPFN also has rate limits (30 calls/min site-wide, 40/day per player) and one batched prediction per player every 30 min.
 
 ## Honesty notes
 

@@ -70,3 +70,19 @@ Running log of decisions, problems, and fixes. Raw material for the DEV write-up
 - In the app, `gemma4:12B` **correctly failed a drawn "leaf" for a bark quest** in 10.0 s:
   "That looks like a digital graphic! Head outside and find a real tree with some texture."
 - Bug found: narrator line from an earlier quest could overwrite the current quest's line (race). Fixed by tracking the current offer id.
+
+## 2026-10-10 — Atlas live, TabPFN live, free-tier guards, rename
+
+- **Renamed to GrassQuest** to match the repo. Mongo database name stays `sidequests` (internal only).
+- **Atlas:** connected; 45 quests + `quest_embedding_index` (1024-d cosine). Atlas `$vectorSearch` returns the same similarities
+  as the local numpy check (bird-photo ↔ two-birds 0.809), so dedupe behaves the same in dev and prod.
+- **TabPFN free tier (from Prior Labs docs + our account's usage endpoint):** 5M tokens/day, 20M/month, resets 00:00 UTC / 1st.
+  `estimate_cost` says every predict at our size (300–1000 train rows × 8 cols) costs the **10k minimum**, model v3.5.
+  -> 500 predictions/day max. Uploads and fits are free.
+- **Guard:** caps 3.75M/day + 15M/month hosted (75%), 2.5M + 10M locally (50%). Usage = max(Prior Labs counter, Mongo ledger).
+  Hitting a cap or getting a 429 pauses TabPFN until the next reset; the heuristic takes over. Verified all three cutoffs.
+- **Fewer calls:** one TabPFN call scores all 45 quests for a player, cached 30 min or until their history changes.
+  Rerolls are free. Plus 30 calls/min site-wide and 40/day per player.
+- **First real TabPFN call:** 11.5 s (fit + predict), cached repeat 0.02 s. 10k tokens used.
+- **ElevenLabs:** free plan does include API access (Developers → API Keys). Guard: ~7k of 10k credits hosted, ~5k locally,
+  15 new lines per player per day, cache hits free, only known players can request audio.

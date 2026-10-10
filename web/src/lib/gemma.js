@@ -41,7 +41,7 @@ async function chat(baseUrl, body) {
 }
 
 export function judgePrompt(quest) {
-  return `You are the friendly but honest judge of "Side Quests", a game that gets people to go outside.
+  return `You are the friendly but honest judge of "GrassQuest", a game that gets people to go outside.
 
 Quest: "${quest.title}"
 What counts as proof: ${quest.proof}

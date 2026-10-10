@@ -1,3 +1,5 @@
+import { loadSettings } from "./settings.js";
+
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export function clock() {
@@ -19,7 +21,7 @@ async function call(path, { method = "GET", body } = {}) {
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new Error("Can't reach the Side Quests server. Is it running?");
+    throw new Error("Can't reach the GrassQuest server. Is it running?");
   }
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -43,7 +45,7 @@ export const api = {
     const res = await fetch(`${API}/api/tts`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, user_id: loadSettings().userId }),
     }).catch(() => null);
     if (!res || res.status !== 200) return null;
     return URL.createObjectURL(await res.blob());

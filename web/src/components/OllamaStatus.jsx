@@ -53,7 +53,7 @@ export default function OllamaStatus({ url, model, onChange }) {
       {(state.status === "unreachable" || state.status === "blocked") && (
         <div className="status bad">
           <div>
-            <b>Can't talk to Ollama.</b> Side Quests uses Gemma running on your own computer through Ollama.
+            <b>Can't talk to Ollama.</b> GrassQuest uses Gemma running on your own computer through Ollama.
             <ol className="steps">
               <li>Install Ollama from <a href="https://ollama.com/download" target="_blank" rel="noreferrer">ollama.com/download</a>.</li>
               <li>Pull the model: <div className="code">ollama pull {RECOMMENDED_MODEL}</div></li>

@@ -11,7 +11,7 @@ from . import config, db, difficulty, game, quests, tts
 if config.SENTRY_DSN:
     sentry_sdk.init(dsn=config.SENTRY_DSN, traces_sample_rate=1.0, send_default_pii=False)
 
-app = FastAPI(title="Side Quests API")
+app = FastAPI(title="GrassQuest API")
 app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 db.ensure_seeded()
 if not db.USING_ATLAS:
@@ -202,12 +202,13 @@ def leaderboard(scope: str = "all", today: str | None = None):
 # ---------- voice ----------
 class Speak(BaseModel):
     text: str = Field(min_length=1, max_length=tts.MAX_CHARS)
+    user_id: str
 
 
 @app.post("/api/tts")
 def speak(body: Speak):
     try:
-        audio = tts.speak(body.text)
+        audio = tts.speak(body.text, body.user_id)
     except Exception:
         audio = None
     if not audio:
@@ -218,4 +219,4 @@ def speak(body: Speak):
 @app.get("/api/health")
 def health():
     return {"ok": True, "db": "atlas" if db.USING_ATLAS else "in-memory (dev)", "quests": db.quests.count_documents({}),
-            "tts": tts.enabled(), "difficulty": difficulty.status(), "sentry": bool(config.SENTRY_DSN)}
+            "tts": {"enabled": tts.enabled(), **tts.budget()}, "difficulty": difficulty.status(), "sentry": bool(config.SENTRY_DSN)}

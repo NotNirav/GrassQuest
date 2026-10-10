@@ -9,7 +9,7 @@ import time
 import numpy as np
 import sentry_sdk
 
-from . import config, db
+from . import config, db, tabpfn_budget
 
 log = logging.getLogger(__name__)
 
@@ -93,6 +93,40 @@ def _fitted_model():
     return model
 
 
+_pred_cache: dict[tuple, tuple[float, dict]] = {}
+PRED_TTL_S = 1800
+
+
+def _tabpfn_all(user_id: str, hour: int, dow: int, streak: int, stats: dict, qrates: dict) -> dict | None:
+    """One TabPFN call scores every quest for this player; reused for 30 min or until their history changes."""
+    key = (user_id, hour, dow, streak, stats["attempts"])
+    hit = _pred_cache.get(key)
+    if hit and time.time() - hit[0] < PRED_TTL_S:
+        return hit[1]
+    ok, why = tabpfn_budget.allow(user_id)
+    if not ok:
+        log.info("TabPFN skipped for %s: %s", user_id, why)
+        return None
+    model = _fitted_model()
+    if model is None:
+        return None
+    pool = list(db.quests.find({}, {"embedding": 0}))
+    X = np.array([feature_row(q, hour, dow, streak, stats, qrates.get(q["_id"], 0.5)) for q in pool], dtype=float)
+    try:
+        with sentry_sdk.start_span(op="tabpfn.predict", name="TabPFN predict_proba") as span:
+            proba = model.predict_proba(X)[:, 1]
+            span.set_data("quests", len(pool))
+    except Exception as e:
+        tabpfn_budget.on_error(e)
+        raise
+    tabpfn_budget.record(user_id)
+    scores = {q["_id"]: round(float(min(max(p, 0.05), 0.95)), 3) for q, p in zip(pool, proba)}
+    for k in [k for k in _pred_cache if k[0] == user_id]:  # one cached entry per player
+        del _pred_cache[k]
+    _pred_cache[key] = (time.time(), scores)
+    return scores
+
+
 def predict(user_id: str, quests: list[dict], hour: int, dow: int, streak: int) -> tuple[list[float], list[list[float]], str]:
     """Returns (probabilities, feature rows, source) where source is 'tabpfn' or 'heuristic'."""
     stats = user_stats(user_id)
@@ -101,12 +135,9 @@ def predict(user_id: str, quests: list[dict], hour: int, dow: int, streak: int) 
 
     if stats["attempts"] >= config.TABPFN_MIN_USER_ATTEMPTS:
         try:
-            model = _fitted_model()
-            if model is not None:
-                with sentry_sdk.start_span(op="tabpfn.predict", name="TabPFN predict_proba") as span:
-                    proba = model.predict_proba(np.array(feats, dtype=float))[:, 1]
-                    span.set_data("candidates", len(quests))
-                return [round(float(min(max(p, 0.05), 0.95)), 3) for p in proba], feats, "tabpfn"
+            scores = _tabpfn_all(user_id, hour, dow, streak, stats, qrates)
+            if scores is not None and all(q["_id"] in scores for q in quests):
+                return [scores[q["_id"]] for q in quests], feats, "tabpfn"
         except Exception:  # network/API trouble must never block a quest
             log.exception("TabPFN failed, falling back to heuristic")
     return [heuristic(q, hour, stats) for q in quests], feats, "heuristic"
@@ -119,4 +150,5 @@ def status() -> dict:
         "training_rows": db.attempts.count_documents({}),
         "synthetic_rows": db.attempts.count_documents({"synthetic": True}),
         "last_fit_rows": _model_cache["rows"],
+        "budget": tabpfn_budget.status(),
     }

@@ -25,7 +25,7 @@ export default function Setup({ settings, onDone }) {
     <div className="setup">
       <div className="hero">
         <div className="leaf-spin">🌿</div>
-        <h1>Side Quests</h1>
+        <h1>GrassQuest</h1>
         <p>Tiny real-world quests that get you off the screen. Snap a photo as proof, and an open-source AI on your own computer judges it.</p>
       </div>
 

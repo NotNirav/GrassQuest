@@ -18,6 +18,8 @@ users = db.users
 attempts = db.attempts
 quests = db.quests
 tts_cache = db.tts_cache
+tabpfn_usage = db.tabpfn_usage
+tts_usage = db.tts_usage
 
 
 def _load(name):
