@@ -104,7 +104,8 @@ def score(user_id: str, quests: list[dict], ctx: dict, streak: int) -> dict:
     key = (user_id, tuple(ctx["cell"]), ctx["sun"]["local_hour"], ctx["weather"]["band"], streak, stats["attempts"])
     hit = _pred_cache.get(key)
     if hit and time.time() - hit[0] < PRED_TTL_S:
-        return hit[1]
+        # the cached call may predate new quests: keep the starter estimate for anything it didn't score
+        return {qid: hit[1].get(qid, v) for qid, v in out.items()}
     ok, why = tabpfn_budget.allow(user_id, calls=2)
     if not ok:
         log.info("TabPFN skipped: %s", why)

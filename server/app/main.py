@@ -18,6 +18,17 @@ app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_meth
 db.ensure_seeded()
 
 
+@app.get("/")
+def index():
+    return {
+        "status": "ok",
+        "service": "GrassQuest API",
+        "message": "GrassQuest backend is running! Open the website at http://localhost:5173",
+        "health": "/api/health",
+        "web": "http://localhost:5173",
+    }
+
+
 @app.on_event("startup")
 def warm_tabpfn():
     # fitting is free but slow (~10 s); do it in the background so the first player doesn't wait for it
@@ -109,6 +120,14 @@ def geocode(q: str, lat: float | None = None, lon: float | None = None):
     except Exception:
         log.exception("place search failed")
         raise HTTPException(502, "Place search is busy. Try again in a moment.")
+
+
+@app.get("/api/reverse")
+def reverse(lat: float, lon: float):
+    try:
+        return context.reverse_place(lat, lon)
+    except Exception:
+        return {"title": "Dropped pin", "detail": ""}
 
 
 # ---------- quests ----------

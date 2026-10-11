@@ -21,6 +21,20 @@ const TABS = [
   ["me", "Profile", User],
 ];
 
+// Reset client cache if URL includes ?reset or ?clear
+if (typeof window !== "undefined") {
+  const params = new URLSearchParams(window.location.search);
+  if (params.has("reset") || params.has("clear")) {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {
+      /* ignore */
+    }
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+}
+
 export default function App() {
   const [settings, setSettings] = useState(loadSettings);
   const [player, setPlayer] = useState(null);
@@ -88,15 +102,15 @@ export default function App() {
       )}
       <main>
         <div hidden={tab !== "today"}>
-          <Today settings={settings} model={model} player={player} onPlayer={setPlayer} onFocus={setFocus} onPlace={(place) => update({ place })} />
+          <Today settings={settings} model={model} player={player} onPlayer={setPlayer} onFocus={setFocus} onPlace={(place) => update(place ? { place } : { place: null, lastPlace: settings.place })} />
         </div>
         {tab === "camp" && player && <Basecamp player={player} phase={phase} onPlayer={setPlayer} />}
         {tab === "guide" && player && <FieldGuide player={player} />}
         {tab === "board" && <Leaderboard player={player} />}
         {tab === "me" && player && (
           <Profile player={player} model={model} settings={settings}
-            onChangePlace={() => update({ place: null })}
-            onLogout={() => { update({ userId: null, place: null }); setPlayer(null); setStarted(false); }} />
+            onChangePlace={() => update({ place: null, lastPlace: settings.place })}
+            onLogout={() => { try { localStorage.clear(); sessionStorage.clear(); } catch {} update({ userId: null, place: null }); setPlayer(null); setStarted(false); }} />
         )}
       </main>
     </>

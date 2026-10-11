@@ -32,7 +32,7 @@ export default function Profile({ player, model, settings, onChangePlace, onLogo
       <div className="split" style={{ alignItems: "start" }}>
         <div className="card">
           <h2 style={{ fontSize: "1.5rem", marginBottom: 10 }}>Settings</h2>
-          <p className="small"><b>Location:</b> {settings.place?.label} <button className="btn link" onClick={onChangePlace}>change</button></p>
+          <p className="small"><b>Base camp:</b> {settings.place?.label} <button className="btn link" onClick={onChangePlace}>move base camp</button></p>
           <p className="small"><b>Judge model:</b> {model || "not found (is Ollama running?)"}</p>
           <p className="small muted">No passwords: your explorer lives in this browser.</p>
           <button className="btn quiet" onClick={() => confirm("Sign out? You can't get this explorer back on this browser.") && onLogout()}>Sign out</button>

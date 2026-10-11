@@ -31,6 +31,7 @@ export const api = {
   createUser: (handle) => post("/api/users", { handle }),
   user: (id) => call(`/api/users/${id}?today=${localDate()}`),
   context: (lat, lon) => post("/api/context", { lat, lon }),
+  reverse: (lat, lon) => call(`/api/reverse?lat=${lat}&lon=${lon}`),
   geocode: (q, near) => call(`/api/geocode?q=${encodeURIComponent(q)}${near ? `&lat=${near.lat}&lon=${near.lon}` : ""}`),
   today: (userId, place, exclude = []) => post("/api/quests/today", { user_id: userId, lat: place.lat, lon: place.lon, exclude }),
   accept: (offerId) => post(`/api/offers/${offerId}/accept`, {}),

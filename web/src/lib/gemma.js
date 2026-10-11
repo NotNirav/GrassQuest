@@ -57,7 +57,7 @@ export async function personalize(baseUrl, model, quest, ctx) {
   return chat(baseUrl, {
     model,
     format: BRIEFING_SCHEMA,
-    options: { temperature: 0.8, num_predict: 220 },
+    options: { temperature: 0.8, num_predict: 500 },
     messages: [{
       role: "user",
       content: `You are "the Ranger", the warm, slightly dramatic guide of GrassQuest, a game that gets people outside.

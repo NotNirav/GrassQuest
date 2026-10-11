@@ -367,3 +367,15 @@ def place_for(ctx: dict, needs: list[str]) -> dict | None:
             return {"feature": n, "name": p["name"] or GENERIC_NAME.get(n, "a spot nearby"), "named": bool(p["name"]),
                     "dist_m": p["dist_m"], "bearing": p["bearing"], "lat": p["lat"], "lon": p["lon"]}
     return None
+
+
+def reverse_place(lat: float, lon: float) -> dict:
+    """What's at this exact pin: building / street / locality (Photon reverse). Used to confirm the base camp."""
+    r = httpx.get("https://photon.komoot.io/reverse", params={"lat": lat, "lon": lon, "limit": 1}, headers=UA, timeout=10)
+    feats = r.json().get("features", [])
+    if not feats:
+        return {"title": "Dropped pin", "detail": ""}
+    p = feats[0]["properties"]
+    title = p.get("name") or " ".join(filter(None, [p.get("housenumber"), p.get("street")])) or p.get("district") or "Dropped pin"
+    detail = ", ".join(dict.fromkeys(filter(None, [p.get("street") if p.get("name") else None, p.get("district") or p.get("locality"), p.get("city")])))
+    return {"title": title, "detail": detail}

@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowUp, Camera, Clock, CloudRain, Coins, Crosshair, Footpri
 import { api } from "../lib/api.js";
 import { fileToBase64, judge, personalize } from "../lib/gemma.js";
 import { departureLine, ranger, stopRanger } from "../lib/ranger.js";
-import { bearingArrow, currentPlace, formatDistance } from "../lib/location.js";
+import { bearingArrow, formatDistance } from "../lib/location.js";
 import { CATEGORY_PHOTO, photo } from "../lib/photos.js";
 import MapView from "../components/MapView.jsx";
 import FieldCard from "../components/FieldCard.jsx";
@@ -24,20 +24,6 @@ export default function Today({ settings, model, player, onPlayer, onFocus, onPl
   const [brief, setBrief] = useState(null);
   const [active, setActive] = useState(loadActive); // { choice, brief, ctx, startedAt, stage }
   const [result, setResult] = useState(null);
-  const [locMsg, setLocMsg] = useState("");
-
-  async function relocate() {
-    setLocMsg("Asking your browser for your exact location…");
-    try {
-      const p = await currentPlace();
-      onPlace({ ...p, label: settings.place?.label });
-      setLocMsg(`Updated · accurate to about ${p.accuracy} m`);
-    } catch (e) {
-      setLocMsg(e.message === "denied"
-        ? "Location is blocked. Click the icon left of the address bar → Location → Allow, then try again."
-        : "Couldn't get your location right now. You can also set it in Profile → change.");
-    }
-  }
   const briefs = useRef({}); // offer_id -> Promise<briefing>, so each one is written once
   const shown = useRef([]); // templates already offered this session, so rerolls bring genuinely new quests
 
@@ -135,8 +121,7 @@ export default function Today({ settings, model, player, onPlayer, onFocus, onPl
         </div>
         <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
           {ctx && <Conditions ctx={ctx} />}
-          <button className="btn link small" onClick={relocate}><Crosshair size={14} /> Update my location</button>
-          {locMsg && <span className="small muted">{locMsg}</span>}
+          <button className="btn link small" onClick={() => onPlace(null)}><Crosshair size={14} /> Base camp: {settings.place?.label?.split(",")[0] ?? "set"} · move</button>
         </div>
       </div>
 

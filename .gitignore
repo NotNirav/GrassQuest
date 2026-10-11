@@ -16,3 +16,7 @@ Thumbs.db
 *.task
 __pycache__/
 .venv/
+.chrome_reset_profile/
+*.chrome_reset_profile/
+.chrome_test_profile/
+*.chrome_test_profile/
