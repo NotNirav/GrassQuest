@@ -1,7 +1,12 @@
+# Render Blueprint: creates the API and the website from this repo.
+# Secrets (sync: false) are typed into the Render dashboard when the Blueprint is created, never committed.
+# If Render gives a service a different URL than the names below, update CORS_ORIGINS / VITE_API_URL to match.
 services:
   - type: web
     name: grassquest-api
     runtime: python
+    plan: free
+    region: singapore
     rootDir: server
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
@@ -13,12 +18,16 @@ services:
         sync: false
       - key: TABPFN_TOKEN
         sync: false
-      - key: ELEVENLABS_API_KEY
-        sync: false
-      - key: SENTRY_DSN
-        sync: false
       - key: CORS_ORIGINS
-        sync: false
+        value: https://grassquest-web.onrender.com,http://localhost:5173
+      # free-tier guards: TabPFN stops at 75% of its limits, ElevenLabs never generates at runtime (voice is pre-made)
+      - key: TABPFN_DAILY_CAP
+        value: "3750000"
+      - key: TABPFN_MONTHLY_CAP
+        value: "15000000"
+      - key: ELEVENLABS_MONTHLY_CHAR_CAP
+        value: "0"
+
   - type: web
     name: grassquest-web
     runtime: static
@@ -26,5 +35,11 @@ services:
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
     envVars:
+      - key: NODE_VERSION
+        value: "22.12.0"
       - key: VITE_API_URL
-        sync: false
+        value: https://grassquest-api.onrender.com
+    headers:
+      - path: /voice/*
+        name: Cache-Control
+        value: public, max-age=604800
